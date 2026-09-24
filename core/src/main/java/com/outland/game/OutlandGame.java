@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.*;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.*;
 import java.util.*;
 
@@ -59,7 +60,6 @@ public class OutlandGame extends ApplicationAdapter {
             env = new Environment();
             env.set(new ColorAttribute(ColorAttribute.AmbientLight, .8f, .82f, .86f, 1f));
             env.add(new DirectionalLight().set(.9f,.88f,.78f,-1f,-2f,-.5f));
-
             int[] colors = {0x68a94fff,0x8a603fff,0x858b91ff,0x79502fff,0x438443ff};
             for (int i=0;i<models.length;i++) {
                 models[i] = new ModelBuilder().createBox(1,1,1,
@@ -77,8 +77,6 @@ public class OutlandGame extends ApplicationAdapter {
         } catch (Throwable t) {
             startupError = t.getClass().getSimpleName()+": "+String.valueOf(t.getMessage());
             if (Gdx.app != null) Gdx.app.error(TAG,"Startup failed",t);
-            // Keep the activity alive and display the failure instead of silently
-            // leaving the user with a white screen where possible.
             try { if (hud==null) hud=new SpriteBatch(); if(font==null) font=new BitmapFont(); } catch(Throwable ignored) {}
         }
     }
@@ -95,7 +93,6 @@ public class OutlandGame extends ApplicationAdapter {
             @Override public boolean touchDown(int x,int y,int pointer,int button) {
                 float w=Gdx.graphics.getWidth(), h=Gdx.graphics.getHeight();
                 float nx=x/w, ny=y/h;
-                // Bottom-right action strip: mine, place, jump, next block.
                 if(ny>.78f && nx>.48f) {
                     if(nx>.84f) jump(); else if(nx>.72f) selected=(selected+1)%types.length;
                     else if(nx>.60f) interact(true); else interact(false);
@@ -124,14 +121,9 @@ public class OutlandGame extends ApplicationAdapter {
         return 3+(int)Math.round(n);
     }
     private void generateWorld() {
-        // Smaller first-load footprint: thousands fewer ModelInstances/draw calls
-        // than the previous 41x41 world, important on entry-level mobile GPUs.
         for(int x=-WORLD_RADIUS;x<=WORLD_RADIUS;x++) for(int z=-WORLD_RADIUS;z<=WORLD_RADIUS;z++) {
             int h=heightAt(x,z);
-            addBlock(x,h,z,0);
-            addBlock(x,h-1,z,1);
-            addBlock(x,h-2,z,1);
-            addBlock(x,h-3,z,2);
+            addBlock(x,h,z,0); addBlock(x,h-1,z,1); addBlock(x,h-2,z,1); addBlock(x,h-3,z,2);
             if(h>3 && rng.nextFloat()>.985f) makeTree(x,h+1,z);
         }
     }
@@ -150,8 +142,7 @@ public class OutlandGame extends ApplicationAdapter {
         for(float d=.5f;d<5.5f;d+=.2f) {
             Vector3 p=new Vector3(pos).mulAdd(dir,d);
             int x=Math.round(p.x),y=Math.round(p.y),z=Math.round(p.z);
-            Block b=blocks.get(key(x,y,z));
-            if(b==null) continue;
+            Block b=blocks.get(key(x,y,z)); if(b==null) continue;
             if(!place){blocks.remove(key(b.x,b.y,b.z));inventory[b.type]++;toast="Mined "+types[b.type];}
             else {
                 int t=selected;if(inventory[t]<=0){toast="No "+types[t];return;}
