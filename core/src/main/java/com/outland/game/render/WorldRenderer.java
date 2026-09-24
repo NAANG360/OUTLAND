@@ -14,6 +14,7 @@ public final class WorldRenderer {
     private final Model[] models=new Model[BlockType.values().length];
     private final Map<Long,ModelInstance> instances=new HashMap<>();
     private final Vector3 scratch=new Vector3();
+    private List<World.Block> cachedBlocks=Collections.emptyList();
     private ModelBatch batch;
     private Environment environment;
     private long cachedRevision=-1;
@@ -38,7 +39,7 @@ public final class WorldRenderer {
         sync(world);
         batch.begin(camera);
         try {
-            for(World.Block block:world.snapshot()) {
+            for(World.Block block:cachedBlocks) {
                 ModelInstance instance=instances.get(World.key(block.x,block.y,block.z));
                 if(instance!=null && instance.transform.getTranslation(scratch).dst2(playerPosition)<24f*24f)
                     batch.render(instance,environment);
@@ -47,8 +48,9 @@ public final class WorldRenderer {
     }
     private void sync(World world) {
         if(cachedRevision==world.revision()) return;
+        cachedBlocks=new ArrayList<>(world.snapshot());
         instances.clear();
-        for(World.Block b:world.snapshot()) {
+        for(World.Block b:cachedBlocks) {
             ModelInstance instance=new ModelInstance(models[b.type.id()]);
             instance.transform.setToTranslation(b.x,b.y,b.z);
             instances.put(World.key(b.x,b.y,b.z),instance);
@@ -58,6 +60,6 @@ public final class WorldRenderer {
     public void dispose() {
         if(batch!=null){batch.dispose();batch=null;}
         for(Model model:models) if(model!=null) model.dispose();
-        Arrays.fill(models,null); instances.clear(); environment=null; created=false; cachedRevision=-1;
+        Arrays.fill(models,null); instances.clear();cachedBlocks=Collections.emptyList();environment=null;created=false;cachedRevision=-1;
     }
 }
