@@ -16,5 +16,10 @@ public final class HudRenderer {
         try { for(int i=0;i<lines.length;i++) font.draw(batch,lines[i],14,height-16-i*22); }
         finally { batch.end(); }
     }
-    public void dispose(){if(batch!=null){batch.dispose();batch=null;}if(font!=null){font.dispose();font=null;}}
+    public void dispose(){
+        SpriteBatch oldBatch=batch;batch=null;
+        if(oldBatch!=null)try{oldBatch.dispose();}catch(Throwable ignored){}
+        BitmapFont oldFont=font;font=null;
+        if(oldFont!=null)try{oldFont.dispose();}catch(Throwable ignored){}
+    }
 }
