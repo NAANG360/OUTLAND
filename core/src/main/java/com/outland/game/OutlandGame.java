@@ -3,6 +3,7 @@ package com.outland.game;
 import com.badlogic.gdx.*;
 import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.math.*;
+import com.outland.game.diagnostics.RuntimeDiagnostics;
 import com.outland.game.input.InputState;
 import com.outland.game.player.*;
 import com.outland.game.render.WorldRenderer;
@@ -47,8 +48,11 @@ public final class OutlandGame extends ApplicationAdapter {
         }
     }
 
-    private void stage(String value){status=value;Gdx.app.log(TAG,"stage="+value);}
-    private void logError(String message,Throwable error){if(Gdx.app!=null)Gdx.app.error(TAG,message,error);}
+    private void stage(String value){status=value;Gdx.app.log(TAG,"stage="+value);RuntimeDiagnostics.record(value,"lifecycle",null);}
+    private void logError(String message,Throwable error){
+        RuntimeDiagnostics.record(status,message,error);
+        if(Gdx.app!=null)Gdx.app.error(TAG,message,error);
+    }
 
     private void installInput(){
         Gdx.input.setInputProcessor(new InputAdapter(){
@@ -118,7 +122,7 @@ public final class OutlandGame extends ApplicationAdapter {
             hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),lines);
         }catch(Throwable failure){
             fatalMessage=failure.getClass().getSimpleName()+": "+String.valueOf(failure.getMessage());
-            logError("Runtime failure at "+status,failure);
+            logError("Runtime failure",failure);
         }
     }
 
@@ -144,7 +148,7 @@ public final class OutlandGame extends ApplicationAdapter {
 
     private void drawSafeMode(){
         Gdx.gl.glClearColor(.08f,.08f,.10f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),new String[]{"OUTLAND SAFE MODE","Failure at: "+status,String.valueOf(fatalMessage),"Diagnostic journal should contain fatal startup exceptions."});
+        hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),new String[]{"OUTLAND SAFE MODE","Failure at: "+status,String.valueOf(fatalMessage),"Private diagnostic journal: app files/outlandlogs/runtime.log"});
     }
     @Override public void resize(int width,int height){if(camera!=null){camera.viewportWidth=Math.max(1,width);camera.viewportHeight=Math.max(1,height);camera.update();}}
     @Override public void pause(){stage("lifecycle.pause");}
