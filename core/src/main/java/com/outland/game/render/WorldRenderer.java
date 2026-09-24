@@ -58,8 +58,12 @@ public final class WorldRenderer {
         cachedRevision=world.revision();
     }
     public void dispose() {
-        if(batch!=null){batch.dispose();batch=null;}
-        for(Model model:models) if(model!=null) model.dispose();
-        Arrays.fill(models,null); instances.clear();cachedBlocks=Collections.emptyList();environment=null;created=false;cachedRevision=-1;
+        ModelBatch oldBatch=batch; batch=null;
+        if(oldBatch!=null)try{oldBatch.dispose();}catch(Throwable ignored){}
+        for(int i=0;i<models.length;i++) {
+            Model model=models[i];models[i]=null;
+            if(model!=null)try{model.dispose();}catch(Throwable ignored){}
+        }
+        instances.clear();cachedBlocks=Collections.emptyList();environment=null;created=false;cachedRevision=-1;
     }
 }
