@@ -1,23 +1,29 @@
-# OUTLAND Native — Android voxel survival
+# OUTLAND Native — Android voxel sandbox
 
-Native Android project using libGDX + Java (no browser runtime, no Godot, no engine source build).
+Native Android project using Java + libGDX (no browser runtime, Godot, or engine source build).
 
 ## Build APK in GitHub Actions
-1. Create a GitHub repo and upload this project.
-2. Push to `main`, or run **Actions → Build OUTLAND APK → Run workflow**.
-3. Download the `OUTLAND-debug-apk` artifact from the completed workflow.
+Push to `main`, or run **Actions → Build OUTLAND APK → Run workflow**. Download the `OUTLAND-debug-apk` artifact from the completed workflow. CI runs core JVM tests before packaging.
 
 ## Local build
 Requires JDK 17+, Android SDK, and Gradle:
-`gradle :android:assembleDebug`
+
+```sh
+gradle --no-daemon :core:test :android:assembleDebug
+```
+
 APK: `android/build/outputs/apk/debug/`
 
-## Current foundation
-- Native Android/libGDX app
-- Seeded procedural heightmap terrain, underground layers, tree generation
-- First-person camera and basic movement/jump
-- Voxel block data, mining/placing interaction methods, inventory/hotbar HUD
-- Android landscape orientation
+## Architecture
+- `OutlandGame` is the lifecycle/composition root.
+- `world/` contains pure Java voxel storage and seeded terrain generation.
+- `player/` owns player simulation; `input/` defines per-frame action state.
+- `render/` owns GL models and the world renderer; `ui/` owns HUD resources.
+- `save/` contains a versioned world/player binary snapshot format (not yet exposed as an in-game menu).
+- `diagnostics/` persists caught runtime/lifecycle failures to app-private storage.
 
-## Honest status
-This is a native playable foundation/scaffold, not yet a finished Minecraft-scale game. The current renderer uses per-block model instances and the interaction UI still needs dedicated on-screen buttons/raycast polish. Chunk meshing, robust save/load, crafting, mobs, caves/ores, and optimization are follow-on systems. Build has not been executed in this environment; CI is included to compile it remotely.
+## Crash diagnostics
+OUTLAND installs its uncaught-exception handler from `OutlandApplication`, before the launcher Activity. Crash/runtime records are staged under the app's private `files/outlandlogs/` directory first. The app requests legacy external-storage write permission and, when granted, copies staged records to `/sdcard/outlandlogs/`. If permission is denied or Android blocks public-folder access, the private staged copy remains; inspect/export it through Android app storage tooling. A public write is best-effort, not guaranteed. Ordinary apps cannot read unrestricted system logcat/tombstones, and no background logger is guaranteed to survive force-stop or OS process cleanup.
+
+## Current status
+The voxel sandbox loop remains a prototype: seeded terrain, first-person movement/jump, mining/placing, inventory, and touch controls. The code has been reorganized into subsystem boundaries, but device-specific stability still requires testing on the target phone. Save serialization exists but is not yet wired into a save/load UI. CI build/test results—not a successful local/device run—are the verification source for this branch.
