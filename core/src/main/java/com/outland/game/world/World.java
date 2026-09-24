@@ -13,17 +13,21 @@ public final class World {
     }
     private final Map<Long, Block> blocks = new HashMap<>();
     private final long seed;
+    private long revision;
     public World(long seed) { this.seed=seed; }
     public long seed() { return seed; }
+    public long revision() { return revision; }
     public int size() { return blocks.size(); }
     public Block getBlock(int x,int y,int z) { return blocks.get(key(x,y,z)); }
     public boolean setBlock(int x,int y,int z,BlockType type) {
         long k=key(x,y,z); if(blocks.containsKey(k)) return false;
-        blocks.put(k,new Block(x,y,z,type)); return true;
+        blocks.put(k,new Block(x,y,z,type)); revision++; return true;
     }
-    public Block removeBlock(int x,int y,int z) { return blocks.remove(key(x,y,z)); }
+    public Block removeBlock(int x,int y,int z) {
+        Block removed=blocks.remove(key(x,y,z)); if(removed!=null) revision++; return removed;
+    }
     public Collection<Block> snapshot() { return Collections.unmodifiableList(new ArrayList<>(blocks.values())); }
-    public void clear() { blocks.clear(); }
+    public void clear() { if(!blocks.isEmpty()){blocks.clear();revision++;} }
 
     /** Collision-free packed key for the supported prototype coordinate range. */
     public static long key(int x,int y,int z) {
