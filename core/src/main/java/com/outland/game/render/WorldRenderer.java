@@ -31,7 +31,7 @@ public final class WorldRenderer {
             environment.set(new ColorAttribute(ColorAttribute.AmbientLight,.8f,.82f,.86f,1f));
             environment.add(new DirectionalLight().set(.9f,.88f,.78f,-1f,-2f,-.5f));
             created=true;
-        } catch(Throwable failure) { dispose(); throw failure; }
+        } catch(Throwable failure) { dispose(); throw new IllegalStateException("Renderer initialization failed",failure); }
     }
     public void render(World world, Camera camera, Vector3 playerPosition) {
         if(!created) throw new IllegalStateException("WorldRenderer not created");
