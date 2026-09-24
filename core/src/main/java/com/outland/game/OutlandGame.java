@@ -31,6 +31,7 @@ public final class OutlandGame extends ApplicationAdapter {
         stage("bootstrap.begin");
         try {
             seed=System.currentTimeMillis()&0x7fffffffL;
+            stage("hud.create"); hud.create();
             stage("world.generate");
             world=new TerrainGenerator().generate(seed);
             player.position.set(0,TerrainGenerator.heightAt(0,0,seed)+2.2f,0);
@@ -38,7 +39,6 @@ public final class OutlandGame extends ApplicationAdapter {
             camera=new PerspectiveCamera(70,Math.max(1,Gdx.graphics.getWidth()),Math.max(1,Gdx.graphics.getHeight()));
             camera.near=.1f; camera.far=60f;
             stage("renderer.create"); worldRenderer.create();
-            stage("hud.create"); hud.create();
             stage("input.install"); installInput();
             status="World ready · tap MINE / PLACE";
             stage("bootstrap.complete blocks="+world.size());
