@@ -14,8 +14,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      # GitHub's Ubuntu runner already includes the Android SDK.
-      # Avoid setup-android's legacy `sdkmanager tools` install request.
       - name: Show Android SDK
         run: |
           echo "ANDROID_HOME=${ANDROID_HOME}"
@@ -23,6 +21,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+      - name: Run core unit tests
+        run: gradle --no-daemon :core:test
       - name: Build debug APK
         run: gradle --no-daemon :android:assembleDebug
       - uses: actions/upload-artifact@v4
