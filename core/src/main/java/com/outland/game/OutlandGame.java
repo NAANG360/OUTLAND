@@ -2,206 +2,156 @@ package com.outland.game;
 
 import com.badlogic.gdx.*;
 import com.badlogic.gdx.graphics.*;
-import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.g3d.*;
-import com.badlogic.gdx.graphics.g3d.attributes.*;
-import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.*;
-import java.util.*;
+import com.outland.game.input.InputState;
+import com.outland.game.player.*;
+import com.outland.game.render.WorldRenderer;
+import com.outland.game.ui.HudRenderer;
+import com.outland.game.world.*;
 
-/** OUTLAND: conservative mobile-first voxel prototype. */
-public class OutlandGame extends ApplicationAdapter {
-    private static final String TAG = "OUTLAND";
-    private static final int WORLD_RADIUS = 9;
-    private static final float RENDER_DISTANCE2 = 24f * 24f;
+/** Composition root. Owns subsystem order; individual systems own their resources/state. */
+public final class OutlandGame extends ApplicationAdapter {
+    private static final String TAG="OUTLAND";
+    private final PlayerState player=new PlayerState();
+    private final PlayerController playerController=new PlayerController();
+    private final InputState input=new InputState();
+    private final WorldRenderer worldRenderer=new WorldRenderer();
+    private final HudRenderer hud=new HudRenderer();
+    private World world;
     private PerspectiveCamera camera;
-    private ModelBatch batch;
-    private Environment env;
-    private final Map<Long, Block> blocks = new HashMap<>();
-    private final Random rng = new Random();
-    private final Vector3 pos = new Vector3(0, 8, 0), tmp = new Vector3();
-    private final String[] types = {"Grass", "Dirt", "Stone", "Wood", "Leaves"};
-    private final int[] inventory = {24, 16, 0, 0, 0};
-    private final Model[] models = new Model[5];
-    private BitmapFont font;
-    private SpriteBatch hud;
     private long seed;
-    private int selected, health = 100;
-    private float yaw, pitch, vy, moveForward, moveSide, touchX, touchY;
-    private boolean grounded, draggingLook;
-    private int movePointer = -1;
-    private String toast = "OUTLAND loading...";
-    private String startupError;
-
-    private static final class Block {
-        final int x, y, z, type;
-        final ModelInstance instance;
-        Block(int x, int y, int z, int type, Model model) {
-            this.x=x; this.y=y; this.z=z; this.type=type;
-            instance = new ModelInstance(model);
-            instance.transform.setToTranslation(x,y,z);
-        }
-    }
-    private long key(int x,int y,int z) {
-        return (((long)(x+2048)&4095)<<24) | (((long)(y+512)&1023)<<14) | ((z+2048)&4095);
-    }
+    private String status="Booting OUTLAND";
+    private String fatalMessage;
+    private int movePointer=-1, lookPointer=-1;
+    private float moveOriginX,moveOriginY,lastLookX,lastLookY;
 
     @Override public void create() {
         Gdx.app.setLogLevel(Application.LOG_DEBUG);
+        stage("bootstrap.begin");
         try {
-            Gdx.app.log(TAG, "create: begin; GL=" + Gdx.graphics.getGLVersion());
-            seed = System.currentTimeMillis() & 0x7fffffffL;
-            rng.setSeed(seed);
-            hud = new SpriteBatch();
-            font = new BitmapFont();
-            batch = new ModelBatch();
-            env = new Environment();
-            env.set(new ColorAttribute(ColorAttribute.AmbientLight, .8f, .82f, .86f, 1f));
-            env.add(new DirectionalLight().set(.9f,.88f,.78f,-1f,-2f,-.5f));
-            int[] colors = {0x68a94fff,0x8a603fff,0x858b91ff,0x79502fff,0x438443ff};
-            for (int i=0;i<models.length;i++) {
-                models[i] = new ModelBuilder().createBox(1,1,1,
-                    new Material(ColorAttribute.createDiffuse(new Color(colors[i]))),
-                    VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
-            }
-            camera = new PerspectiveCamera(70, Math.max(1,Gdx.graphics.getWidth()), Math.max(1,Gdx.graphics.getHeight()));
+            seed=System.currentTimeMillis()&0x7fffffffL;
+            stage("world.generate");
+            world=new TerrainGenerator().generate(seed);
+            player.position.set(0,TerrainGenerator.heightAt(0,0,seed)+2.2f,0);
+            stage("camera.create");
+            camera=new PerspectiveCamera(70,Math.max(1,Gdx.graphics.getWidth()),Math.max(1,Gdx.graphics.getHeight()));
             camera.near=.1f; camera.far=60f;
-            generateWorld();
-            pos.set(0,heightAt(0,0)+2.2f,0);
-            camera.position.set(pos);
-            installInput();
-            toast = "World ready · tap MINE / PLACE";
-            Gdx.app.log(TAG, "create: complete; blocks="+blocks.size());
-        } catch (Throwable t) {
-            startupError = t.getClass().getSimpleName()+": "+String.valueOf(t.getMessage());
-            if (Gdx.app != null) Gdx.app.error(TAG,"Startup failed",t);
-            try { if (hud==null) hud=new SpriteBatch(); if(font==null) font=new BitmapFont(); } catch(Throwable ignored) {}
+            stage("renderer.create"); worldRenderer.create();
+            stage("hud.create"); hud.create();
+            stage("input.install"); installInput();
+            status="World ready · tap MINE / PLACE";
+            stage("bootstrap.complete blocks="+world.size());
+        } catch(Throwable failure) {
+            fatalMessage=failure.getClass().getSimpleName()+": "+String.valueOf(failure.getMessage());
+            logError("Bootstrap failed at "+status,failure);
         }
     }
 
-    private void installInput() {
-        Gdx.input.setInputProcessor(new InputAdapter() {
-            @Override public boolean keyDown(int k) {
-                if(k>=Input.Keys.NUM_1 && k<=Input.Keys.NUM_5) selected=k-Input.Keys.NUM_1;
-                if(k==Input.Keys.SPACE) jump();
-                if(k==Input.Keys.F) interact(false);
-                if(k==Input.Keys.G) interact(true);
+    private void stage(String value){status=value;Gdx.app.log(TAG,"stage="+value);}
+    private void logError(String message,Throwable error){if(Gdx.app!=null)Gdx.app.error(TAG,message,error);}
+
+    private void installInput(){
+        Gdx.input.setInputProcessor(new InputAdapter(){
+            @Override public boolean keyDown(int key){
+                if(key>=Input.Keys.NUM_1&&key<=Input.Keys.NUM_5)player.selectedBlock=key-Input.Keys.NUM_1;
+                if(key==Input.Keys.SPACE)input.jump=true;
+                if(key==Input.Keys.F)input.mine=true;
+                if(key==Input.Keys.G)input.place=true;
                 return true;
             }
-            @Override public boolean touchDown(int x,int y,int pointer,int button) {
-                float w=Gdx.graphics.getWidth(), h=Gdx.graphics.getHeight();
-                float nx=x/w, ny=y/h;
-                if(ny>.78f && nx>.48f) {
-                    if(nx>.84f) jump(); else if(nx>.72f) selected=(selected+1)%types.length;
-                    else if(nx>.60f) interact(true); else interact(false);
+            @Override public boolean touchDown(int x,int y,int pointer,int button){
+                float nx=x/(float)Math.max(1,Gdx.graphics.getWidth()), ny=y/(float)Math.max(1,Gdx.graphics.getHeight());
+                if(ny>.78f&&nx>.48f){
+                    if(nx>.84f)input.jump=true;
+                    else if(nx>.72f)input.nextBlock=true;
+                    else if(nx>.60f)input.place=true;
+                    else input.mine=true;
                     return true;
                 }
-                if(nx>.42f) { draggingLook=true; touchX=x; touchY=y; }
-                else { movePointer=pointer; moveForward=ny>.55f?1:-1; moveSide=nx<.19f?-1:(nx>.29f?1:0); }
+                if(nx>.42f){lookPointer=pointer;lastLookX=x;lastLookY=y;}
+                else {movePointer=pointer;moveOriginX=x;moveOriginY=y;input.forward=ny>.55f?1:-1;input.strafe=nx<.19f?-1:(nx>.29f?1:0);}
                 return true;
             }
-            @Override public boolean touchDragged(int x,int y,int pointer) {
-                if(draggingLook) { yaw-=(x-touchX)*.004f; pitch=MathUtils.clamp(pitch-(y-touchY)*.004f,-1.25f,1.25f); touchX=x; touchY=y; }
+            @Override public boolean touchDragged(int x,int y,int pointer){
+                if(pointer==lookPointer){input.lookX+=x-lastLookX;input.lookY+=y-lastLookY;lastLookX=x;lastLookY=y;}
+                if(pointer==movePointer){input.forward=MathUtils.clamp((moveOriginY-y)/100f,-1,1);input.strafe=MathUtils.clamp((x-moveOriginX)/100f,-1,1);}
                 return true;
             }
-            @Override public boolean touchUp(int x,int y,int pointer,int button) {
-                if(pointer==movePointer){movePointer=-1;moveForward=moveSide=0;}
-                draggingLook=false; return true;
+            @Override public boolean touchUp(int x,int y,int pointer,int button){
+                if(pointer==movePointer){movePointer=-1;input.forward=input.strafe=0;}
+                if(pointer==lookPointer)lookPointer=-1;
+                return true;
             }
-            @Override public boolean touchCancelled(int x,int y,int pointer,int button) {
-                movePointer=-1;moveForward=moveSide=0;draggingLook=false;return true;
+            @Override public boolean touchCancelled(int x,int y,int pointer,int button){
+                movePointer=lookPointer=-1;input.forward=input.strafe=input.lookX=input.lookY=0;return true;
             }
         });
     }
 
-    private int heightAt(int x,int z) {
-        double n=Math.sin((x+seed%97)*.13)*1.5+Math.cos((z-seed%53)*.11)*1.4+Math.sin((x+z)*.07)*1.5;
-        return 3+(int)Math.round(n);
-    }
-    private void generateWorld() {
-        for(int x=-WORLD_RADIUS;x<=WORLD_RADIUS;x++) for(int z=-WORLD_RADIUS;z<=WORLD_RADIUS;z++) {
-            int h=heightAt(x,z);
-            addBlock(x,h,z,0); addBlock(x,h-1,z,1); addBlock(x,h-2,z,1); addBlock(x,h-3,z,2);
-            if(h>3 && rng.nextFloat()>.985f) makeTree(x,h+1,z);
+    @Override public void render(){
+        if(Gdx.gl==null)return;
+        float dt=Math.min(Gdx.graphics.getDeltaTime(),.033f);
+        try{
+            if(fatalMessage!=null){drawSafeMode();return;}
+            if(Gdx.input.isKeyPressed(Input.Keys.W))input.forward=1;
+            else if(Gdx.input.isKeyPressed(Input.Keys.S))input.forward=-1;
+            else if(movePointer<0)input.forward=0;
+            if(Gdx.input.isKeyPressed(Input.Keys.A))input.strafe=-1;
+            else if(Gdx.input.isKeyPressed(Input.Keys.D))input.strafe=1;
+            else if(movePointer<0)input.strafe=0;
+            if(Gdx.input.isKeyJustPressed(Input.Keys.SPACE))input.jump=true;
+            if(input.nextBlock){player.selectedBlock=(player.selectedBlock+1)%BlockType.values().length;input.nextBlock=false;}
+            playerController.update(player,input,dt,seed);
+            if(input.mine)interact(false);
+            if(input.place)interact(true);
+            input.clearTransient();
+            camera.position.set(player.position);
+            camera.direction.set(MathUtils.sin(player.yaw)*MathUtils.cos(player.pitch),MathUtils.sin(player.pitch),-MathUtils.cos(player.yaw)*MathUtils.cos(player.pitch)).nor();
+            camera.up.set(Vector3.Y);camera.viewportWidth=Math.max(1,Gdx.graphics.getWidth());camera.viewportHeight=Math.max(1,Gdx.graphics.getHeight());camera.update();
+            Gdx.gl.glViewport(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
+            Gdx.gl.glClearColor(.48f,.72f,.88f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);
+            worldRenderer.render(world,camera,player.position);
+            String[] lines={"OUTLAND · "+seed,"HP "+player.health+"   XYZ "+(int)player.position.x+" / "+(int)player.position.y+" / "+(int)player.position.z,
+                "[1]Grass "+player.inventory[0]+" [2]Dirt "+player.inventory[1]+" [3]Stone "+player.inventory[2],
+                "[4]Wood "+player.inventory[3]+" [5]Leaves "+player.inventory[4]+" Selected: "+BlockType.values()[player.selectedBlock],
+                status,"MOVE: left · LOOK: right drag","MINE       PLACE       NEXT       JUMP"};
+            hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),lines);
+        }catch(Throwable failure){
+            fatalMessage=failure.getClass().getSimpleName()+": "+String.valueOf(failure.getMessage());
+            logError("Runtime failure at "+status,failure);
         }
     }
-    private void makeTree(int x,int y,int z) {
-        for(int i=0;i<3;i++) addBlock(x,y+i,z,3);
-        for(int dx=-1;dx<=1;dx++) for(int dz=-1;dz<=1;dz++) for(int dy=2;dy<=4;dy++)
-            if(Math.abs(dx)+Math.abs(dz)+(dy==4?1:0)<4) addBlock(x+dx,y+dy,z+dz,4);
-    }
-    private void addBlock(int x,int y,int z,int type) {
-        long k=key(x,y,z); if(!blocks.containsKey(k)) blocks.put(k,new Block(x,y,z,type,models[type]));
-    }
-    private void jump(){if(grounded){vy=6.5f;grounded=false;}}
-    private Vector3 forward(){return new Vector3(MathUtils.sin(yaw),0,-MathUtils.cos(yaw)).nor();}
-    private void interact(boolean place) {
-        Vector3 dir=new Vector3(MathUtils.sin(yaw)*MathUtils.cos(pitch),MathUtils.sin(pitch),-MathUtils.cos(yaw)*MathUtils.cos(pitch)).nor();
-        for(float d=.5f;d<5.5f;d+=.2f) {
-            Vector3 p=new Vector3(pos).mulAdd(dir,d);
-            int x=Math.round(p.x),y=Math.round(p.y),z=Math.round(p.z);
-            Block b=blocks.get(key(x,y,z)); if(b==null) continue;
-            if(!place){blocks.remove(key(b.x,b.y,b.z));inventory[b.type]++;toast="Mined "+types[b.type];}
-            else {
-                int t=selected;if(inventory[t]<=0){toast="No "+types[t];return;}
-                Vector3 q=new Vector3(p).mulAdd(dir,-.65f);int bx=Math.round(q.x),by=Math.round(q.y),bz=Math.round(q.z);
-                if(Math.abs(bx-pos.x)<1.2f&&Math.abs(bz-pos.z)<1.2f)return;
-                long k=key(bx,by,bz);if(!blocks.containsKey(k)){addBlock(bx,by,bz,t);inventory[t]--;toast="Placed "+types[t];}
+
+    private void interact(boolean place){
+        Vector3 direction=new Vector3(MathUtils.sin(player.yaw)*MathUtils.cos(player.pitch),MathUtils.sin(player.pitch),-MathUtils.cos(player.yaw)*MathUtils.cos(player.pitch)).nor();
+        for(float distance=.5f;distance<5.5f;distance+=.2f){
+            Vector3 point=new Vector3(player.position).mulAdd(direction,distance);
+            int x=Math.round(point.x),y=Math.round(point.y),z=Math.round(point.z);
+            World.Block block=world.getBlock(x,y,z);if(block==null)continue;
+            if(!place){world.removeBlock(x,y,z);player.inventory[block.type.id()]++;status="Mined "+block.type;}
+            else{
+                int selected=player.selectedBlock;
+                if(player.inventory[selected]<=0){status="No "+BlockType.values()[selected];return;}
+                Vector3 target=new Vector3(point).mulAdd(direction,-.65f);
+                int bx=Math.round(target.x),by=Math.round(target.y),bz=Math.round(target.z);
+                if(Math.abs(bx-player.position.x)<1.2f&&Math.abs(bz-player.position.z)<1.2f)return;
+                if(world.setBlock(bx,by,bz,BlockType.values()[selected])){player.inventory[selected]--;status="Placed "+BlockType.values()[selected];}
             }
             return;
         }
-        toast="Aim at a block";
+        status="Aim at a block";
     }
 
-    @Override public void render() {
-        if(Gdx.gl==null)return;
-        float dt=Math.min(Gdx.graphics.getDeltaTime(),.033f);
-        try {
-            if(startupError!=null){drawError();return;}
-            if(Gdx.input.isKeyPressed(Input.Keys.W))moveForward=1;else if(Gdx.input.isKeyPressed(Input.Keys.S))moveForward=-1;else if(movePointer<0)moveForward=0;
-            if(Gdx.input.isKeyPressed(Input.Keys.A))moveSide=-1;else if(Gdx.input.isKeyPressed(Input.Keys.D))moveSide=1;else if(movePointer<0)moveSide=0;
-            if(Gdx.input.isKeyJustPressed(Input.Keys.SPACE))jump();
-            Vector3 f=forward(),right=new Vector3(f).crs(Vector3.Y).nor();
-            pos.mulAdd(f,moveForward*4.2f*dt).mulAdd(right,moveSide*4.2f*dt);
-            vy-=17f*dt;pos.y+=vy*dt;
-            int ground=heightAt(Math.round(pos.x),Math.round(pos.z));
-            if(pos.y<ground+1.7f){pos.y=ground+1.7f;vy=0;grounded=true;}
-            camera.position.set(pos);
-            camera.direction.set(MathUtils.sin(yaw)*MathUtils.cos(pitch),MathUtils.sin(pitch),-MathUtils.cos(yaw)*MathUtils.cos(pitch)).nor();
-            camera.up.set(Vector3.Y);camera.update();
-            Gdx.gl.glViewport(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
-            Gdx.gl.glClearColor(.48f,.72f,.88f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);
-            batch.begin(camera);
-            for(Block b:blocks.values()) if(b.instance.transform.getTranslation(tmp).dst2(pos)<RENDER_DISTANCE2) batch.render(b.instance,env);
-            batch.end();
-            hud.setProjectionMatrix(new Matrix4().setToOrtho2D(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight()));hud.begin();
-            float sh=Gdx.graphics.getHeight();
-            font.draw(hud,"OUTLAND  ·  "+seed,14,sh-16);
-            font.draw(hud,"HP "+health+"   XYZ "+(int)pos.x+" / "+(int)pos.y+" / "+(int)pos.z,14,sh-38);
-            font.draw(hud,"[1]Grass "+inventory[0]+" [2]Dirt "+inventory[1]+" [3]Stone "+inventory[2],14,sh-60);
-            font.draw(hud,"[4]Wood "+inventory[3]+" [5]Leaves "+inventory[4]+"  Selected: "+types[selected],14,sh-82);
-            font.draw(hud,toast,14,sh-106);
-            font.draw(hud,"MOVE: left · LOOK: right drag",14,22);
-            font.draw(hud,"MINE     PLACE     NEXT     JUMP",Gdx.graphics.getWidth()*.50f,22);
-            hud.end();
-        } catch(Throwable t) {
-            startupError=t.getClass().getSimpleName()+": "+String.valueOf(t.getMessage());
-            Gdx.app.error(TAG,"Render failed",t);
-            try{drawError();}catch(Throwable ignored){}
-        }
-    }
-    private void drawError(){
-        if(hud==null||font==null)return;
+    private void drawSafeMode(){
         Gdx.gl.glClearColor(.08f,.08f,.10f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        hud.setProjectionMatrix(new Matrix4().setToOrtho2D(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight()));
-        hud.begin();font.draw(hud,"OUTLAND SAFE MODE",24,Gdx.graphics.getHeight()-35);
-        font.draw(hud,"Startup/render error:",24,Gdx.graphics.getHeight()-75);
-        font.draw(hud,String.valueOf(startupError),24,Gdx.graphics.getHeight()-105);hud.end();
+        hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),new String[]{"OUTLAND SAFE MODE","Failure at: "+status,String.valueOf(fatalMessage),"Diagnostic journal should contain fatal startup exceptions."});
     }
-    @Override public void resize(int w,int h){if(camera!=null){camera.viewportWidth=Math.max(1,w);camera.viewportHeight=Math.max(1,h);camera.update();}}
+    @Override public void resize(int width,int height){if(camera!=null){camera.viewportWidth=Math.max(1,width);camera.viewportHeight=Math.max(1,height);camera.update();}}
+    @Override public void pause(){stage("lifecycle.pause");}
+    @Override public void resume(){stage("lifecycle.resume");}
     @Override public void dispose(){
-        try{if(batch!=null)batch.dispose();if(hud!=null)hud.dispose();if(font!=null)font.dispose();for(Model m:models)if(m!=null)m.dispose();}catch(Throwable t){if(Gdx.app!=null)Gdx.app.error(TAG,"Dispose failed",t);}
+        stage("lifecycle.dispose");
+        try{hud.dispose();}catch(Throwable t){logError("HUD dispose failed",t);}
+        try{worldRenderer.dispose();}catch(Throwable t){logError("Renderer dispose failed",t);}
     }
 }
