@@ -31,15 +31,31 @@ dependencies {
     natives "com.badlogicgames.gdx:gdx-platform:1.14.2:natives-armeabi-v7a"
 }
 
-tasks.register("extractGdxNatives", Copy) {
-    from(configurations.natives.collect { zipTree(it) }) {
-        include "lib/**/*.so"
-        eachFile {
-            path = path.replaceFirst(/^lib\\//, "")
-        }
-        includeEmptyDirs = false
+tasks.register("extractGdxNatives") {
+    outputs.dir("$buildDir/generated/gdxNatives")
+
+    doFirst {
+        delete("$buildDir/generated/gdxNatives")
     }
-    into "$buildDir/generated/gdxNatives"
+
+    doLast {
+        configurations.natives.files.each { nativeJar ->
+            def abi = null
+            if (nativeJar.name.endsWith("natives-arm64-v8a.jar")) {
+                abi = "arm64-v8a"
+            } else if (nativeJar.name.endsWith("natives-armeabi-v7a.jar")) {
+                abi = "armeabi-v7a"
+            }
+
+            if (abi != null) {
+                copy {
+                    from zipTree(nativeJar)
+                    include "*.so"
+                    into "$buildDir/generated/gdxNatives/$abi"
+                }
+            }
+        }
+    }
 }
 
 tasks.named("preBuild") {
