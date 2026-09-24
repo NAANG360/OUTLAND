@@ -25,6 +25,14 @@ jobs:
         run: gradle --no-daemon :core:test
       - name: Build debug APK
         run: gradle --no-daemon :android:assembleDebug
+      - name: Verify libGDX native payload
+        run: |
+          APK="$(find android/build/outputs/apk/debug -name '*.apk' -print -quit)"
+          test -n "${APK}"
+          echo "Inspecting ${APK}"
+          unzip -l "${APK}" | grep -E 'lib/(arm64-v8a|armeabi-v7a)/libgdx\.so$'
+          COUNT="$(unzip -l "${APK}" | grep -Ec 'lib/(arm64-v8a|armeabi-v7a)/libgdx\.so$')"
+          test "${COUNT}" -eq 2
       - uses: actions/upload-artifact@v4
         with:
           name: OUTLAND-debug-apk
