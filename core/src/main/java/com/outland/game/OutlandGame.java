@@ -7,8 +7,11 @@ import com.outland.game.diagnostics.RuntimeDiagnostics;
 import com.outland.game.input.InputState;
 import com.outland.game.player.*;
 import com.outland.game.render.WorldRenderer;
+import com.outland.game.save.WorldSave;
 import com.outland.game.ui.HudRenderer;
 import com.outland.game.world.*;
+import java.io.*;
+import java.util.Arrays;
 
 /** Composition root. Owns subsystem order; individual systems own their resources/state. */
 public final class OutlandGame extends ApplicationAdapter {
@@ -30,22 +33,51 @@ public final class OutlandGame extends ApplicationAdapter {
         Gdx.app.setLogLevel(Application.LOG_DEBUG);
         stage("bootstrap.begin");
         try {
-            seed=System.currentTimeMillis()&0x7fffffffL;
             stage("hud.create"); hud.create();
-            stage("world.generate");
-            world=new TerrainGenerator().generate(seed);
-            player.position.set(0,TerrainGenerator.heightAt(0,0,seed)+2.2f,0);
+            loadOrGenerateWorld();
             stage("camera.create");
             camera=new PerspectiveCamera(70,Math.max(1,Gdx.graphics.getWidth()),Math.max(1,Gdx.graphics.getHeight()));
             camera.near=.1f; camera.far=60f;
             stage("renderer.create"); worldRenderer.create();
             stage("input.install"); installInput();
-            status="World ready · tap MINE / PLACE";
             stage("bootstrap.complete blocks="+world.size());
         } catch(Throwable failure) {
             fatalMessage=failure.getClass().getSimpleName()+": "+String.valueOf(failure.getMessage());
             logError("Bootstrap failed at "+status,failure);
         }
+    }
+
+    private void loadOrGenerateWorld(){
+        File saveFile=Gdx.files.local("saves/world.dat").file();
+        if(saveFile.isFile()){
+            stage("save.load");
+            try(FileInputStream in=new FileInputStream(saveFile)){
+                WorldSave.Snapshot snapshot=WorldSave.read(in);
+                world=snapshot.world;copyPlayer(snapshot.player);seed=world.seed();
+                status="Loaded saved world";return;
+            }catch(Throwable failure){logError("Save load failed; generating a fresh world",failure);}
+        }
+        seed=System.currentTimeMillis()&0x7fffffffL;
+        stage("world.generate");world=new TerrainGenerator().generate(seed);
+        player.position.set(0,TerrainGenerator.heightAt(0,0,seed)+2.2f,0);
+        status="New world generated";
+    }
+
+    private void copyPlayer(PlayerState source){
+        player.position.set(source.position);player.yaw=source.yaw;player.pitch=source.pitch;
+        player.verticalVelocity=source.verticalVelocity;player.grounded=source.grounded;
+        player.health=source.health;player.selectedBlock=source.selectedBlock;
+        System.arraycopy(source.inventory,0,player.inventory,0,player.inventory.length);
+    }
+
+    private void saveWorld(){
+        if(world==null)return;
+        try{
+            File file=Gdx.files.local("saves/world.dat").file();
+            File parent=file.getParentFile();if(parent!=null&&!parent.exists()&&!parent.mkdirs())throw new IOException("Could not create save directory");
+            try(FileOutputStream out=new FileOutputStream(file,false)){WorldSave.write(out,world,player,world.seed());out.getFD().sync();}
+            RuntimeDiagnostics.record(status,"world save committed: "+file.getAbsolutePath(),null);
+        }catch(Throwable failure){logError("World save failed",failure);}
     }
 
     private void stage(String value){status=value;Gdx.app.log(TAG,"stage="+value);RuntimeDiagnostics.record(value,"lifecycle",null);}
@@ -151,10 +183,10 @@ public final class OutlandGame extends ApplicationAdapter {
         hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),new String[]{"OUTLAND SAFE MODE","Failure at: "+status,String.valueOf(fatalMessage),"Private diagnostic journal: app files/outlandlogs/runtime.log"});
     }
     @Override public void resize(int width,int height){if(camera!=null){camera.viewportWidth=Math.max(1,width);camera.viewportHeight=Math.max(1,height);camera.update();}}
-    @Override public void pause(){stage("lifecycle.pause");}
+    @Override public void pause(){stage("lifecycle.pause");saveWorld();}
     @Override public void resume(){stage("lifecycle.resume");}
     @Override public void dispose(){
-        stage("lifecycle.dispose");
+        saveWorld();stage("lifecycle.dispose");
         try{hud.dispose();}catch(Throwable t){logError("HUD dispose failed",t);}
         try{worldRenderer.dispose();}catch(Throwable t){logError("Renderer dispose failed",t);}
     }
