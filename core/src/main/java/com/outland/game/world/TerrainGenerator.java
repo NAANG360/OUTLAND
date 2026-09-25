@@ -20,7 +20,6 @@ public final class TerrainGenerator {
             world.setBlock(x,h-2,z,BlockType.DIRT);
             world.setBlock(x,h-3,z,BlockType.STONE);
 
-            // Give rare minerals their own branch before vegetation so they can actually spawn.
             float roll=random.nextFloat();
             if(roll>.997f) world.replaceBlock(x,h-3,z,BlockType.URANIUM);
             else if(h>3&&roll>.994f) makeTree(world,x,h+1,z);
@@ -30,7 +29,6 @@ public final class TerrainGenerator {
     }
 
     public static int heightAt(int x,int z,long seed){
-        // Multiple scales make broad rises, shallow dips, and sharper ridgelines.
         double broad=Math.sin((x+seed%97)*.055)*2.4
                 +Math.cos((z-seed%53)*.047)*2.0;
         double ridge=Math.sin((x+z)*.12)*1.35
@@ -40,23 +38,21 @@ public final class TerrainGenerator {
     }
 
     private static void makeTree(World world,int x,int y,int z){
+        // Storage/collision stays block based, but the renderer turns this into
+        // a continuous low-poly tree silhouette rather than a pile of cubes.
         for(int i=0;i<4;i++)world.setBlock(x,y+i,z,BlockType.WOOD);
-        // Compact, asymmetric crown: fewer small foliage volumes instead of a blocky sphere.
-        for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++){
-            if(Math.abs(dx)+Math.abs(dz)<=1){
-                world.setBlock(x+dx,y+2,z+dz,BlockType.LEAVES);
-                world.setBlock(x+dx,y+3,z+dz,BlockType.LEAVES);
-            }
-        }
+        world.setBlock(x+1,y+2,z,BlockType.LEAVES);
+        world.setBlock(x-1,y+3,z,BlockType.LEAVES);
+        world.setBlock(x,y+3,z+1,BlockType.LEAVES);
         world.setBlock(x,y+4,z,BlockType.LEAVES);
+        world.setBlock(x+1,y+4,z-1,BlockType.LEAVES);
     }
 
     private static void makeCactus(World world,int x,int y,int z){
-        int height=2+(int)(Math.abs(x*31L+z*17L)%3);
+        int height=3+(int)(Math.abs(x*31L+z*17L)%2);
         for(int i=0;i<height;i++)world.setBlock(x,y+i,z,BlockType.CACTUS);
-        if(height>=3){
-            world.setBlock(x+1,y+1,z,BlockType.CACTUS);
-            world.setBlock(x-1,y+2,z,BlockType.CACTUS);
-        }
+        // Short, offset arms make a recognizable saguaro silhouette.
+        world.setBlock(x+1,y+1,z,BlockType.CACTUS);
+        if(height>=4)world.setBlock(x-1,y+2,z,BlockType.CACTUS);
     }
 }
