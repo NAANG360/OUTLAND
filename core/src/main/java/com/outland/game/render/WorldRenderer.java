@@ -54,7 +54,7 @@ public final class WorldRenderer {
             Material trunkMat=new Material(ColorAttribute.createDiffuse(new Color(0x69452fff)));
             Material barkMat=new Material(ColorAttribute.createDiffuse(new Color(0x533521ff)));
             Material leafMat=new Material(ColorAttribute.createDiffuse(new Color(0x39733cff)));
-            Material leafLightMat=new Material(ColorAttribute.createDiffuse(new Color(0x4e914aff)));
+            
             Material cactusMat=new Material(ColorAttribute.createDiffuse(new Color(0x4f9f54ff)));
 
             // One-piece-ish stylized tree parts. Multiple organic lobes beat the
@@ -140,7 +140,7 @@ public final class WorldRenderer {
     private void addTree(Map<Long,Array<ModelInstance>> pending,World.Block b){
         float seed=Math.abs(World.key(b.x,b.y,b.z)%1000)/1000f;
         float lean=(seed-.5f)*14f;
-        addProp(pending,treeTrunk,b.x,b.y+1.45f,b.z,1f,lean,0f);
+        addProp(pending,treeTrunk,b.x,b.y+1.45f,b.z,1f,lean,0f,0f);
 
         addBranch(pending,b.x,b.y+1.9f,b.z,b.x+0.7f,b.y+2.35f,b.z,lean);
         addBranch(pending,b.x,b.y+2.35f,b.z,b.x-0.55f,b.y+2.8f,b.z,lean);
@@ -166,34 +166,35 @@ public final class WorldRenderer {
     }
 
     private void addLeaf(Map<Long,Array<ModelInstance>> pending,float x,float y,float z,float scale){
-        addProp(pending,treeLeaf,x,y,z,scale,0f,0f);
+        addProp(pending,treeLeaf,x,y,z,scale,0f,0f,0f);
     }
 
     private void addCactus(Map<Long,Array<ModelInstance>> pending,World world,World.Block b){
         int height=1;
         while(world.getBlock(b.x,b.y+height,b.z)!=null && world.getBlock(b.x,b.y+height,b.z).type==BlockType.CACTUS)height++;
-        addProp(pending,cactusBody,b.x,b.y+(height-1)*.5f,b.z,1f,0f,0f);
+        addProp(pending,cactusBody,b.x,b.y+(height-1)*.5f,b.z,1f,0f,0f,0f);
         // Scale the 3.5-unit source to the actual stored height.
         Array<ModelInstance> list=getList(pending,b.x,b.z);
         ModelInstance body=list.peek();
         body.transform.scale(1f,height/3.5f,1f);
 
-        addProp(pending,cactusTip,b.x,b.y+height-.02f,b.z,1f,0f,0f);
+        addProp(pending,cactusTip,b.x,b.y+height-.02f,b.z,1f,0f,0f,0f);
         if(height>=3){
-            addProp(pending,cactusArm,b.x+.48f,b.y+1.05f,b.z,1f,0f,90f);
-            addProp(pending,cactusTip,b.x+1.0f,b.y+1.05f,b.z,.72f,0f,0f);
+            addProp(pending,cactusArm,b.x+.48f,b.y+1.05f,b.z,1f,0f,0f,90f);
+            addProp(pending,cactusTip,b.x+1.0f,b.y+1.05f,b.z,.72f,0f,0f,0f);
         }
         if(height>=4){
-            addProp(pending,cactusArm,b.x-.48f,b.y+1.95f,b.z,1f,0f,-90f);
-            addProp(pending,cactusTip,b.x-1.0f,b.y+1.95f,b.z,.72f,0f,0f);
+            addProp(pending,cactusArm,b.x-.48f,b.y+1.95f,b.z,1f,0f,0f,-90f);
+            addProp(pending,cactusTip,b.x-1.0f,b.y+1.95f,b.z,.72f,0f,0f,0f);
         }
     }
 
-    private void addProp(Map<Long,Array<ModelInstance>> pending,Model model,float x,float y,float z,float scale,float rotX,float rotY){
+    private void addProp(Map<Long,Array<ModelInstance>> pending,Model model,float x,float y,float z,float scale,float rotX,float rotY,float rotZ){
         ModelInstance i=new ModelInstance(model);
         i.transform.setToTranslation(x,y,z).scale(scale,scale,scale);
         if(rotX!=0)i.transform.rotate(Vector3.X,rotX);
         if(rotY!=0)i.transform.rotate(Vector3.Y,rotY);
+        if(rotZ!=0)i.transform.rotate(Vector3.Z,rotZ);
         add(pending,i,(int)Math.floor(x),(int)Math.floor(z));
     }
 
