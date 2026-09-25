@@ -25,7 +25,7 @@ public final class WorldRenderer {
     private final Map<Long,Chunk> chunks=new HashMap<>();
     private final Map<Long,Map<Long,World.Block>> blocksByChunk=new HashMap<>();
     private final Vector3 scratch=new Vector3();
-    private Model treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip,rock,rockDark;
+    private Model treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip,rock,rockDark,grassTuft,bush;
     private ModelBatch batch;
     private Environment environment;
     private long cachedRevision=-1;
@@ -50,10 +50,10 @@ public final class WorldRenderer {
         int[] colors={0x5f8f4fff,0x765238ff,0x777b7aff,0x6b4734ff,0x3f743fff,0x4b914bff,0x7dbb68ff};
         try{
             long attrs=VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal;
-            models[BlockType.GRASS.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[0]))),attrs);
+            models[BlockType.GRASS.id()]=builder.createBox(1.08f,.46f,1.08f,new Material(ColorAttribute.createDiffuse(new Color(colors[0]))),attrs);
             grassVariants[0]=models[BlockType.GRASS.id()];
-            grassVariants[1]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(0x668f50ff))),attrs);
-            grassVariants[2]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(0x587f47ff))),attrs);
+            grassVariants[1]=builder.createBox(1.08f,.40f,1.08f,new Material(ColorAttribute.createDiffuse(new Color(0x668f50ff))),attrs);
+            grassVariants[2]=builder.createBox(1.08f,.34f,1.08f,new Material(ColorAttribute.createDiffuse(new Color(0x587f47ff))),attrs);
             models[BlockType.DIRT.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[1]))),attrs);
             dirtVariants[0]=models[BlockType.DIRT.id()];
             dirtVariants[1]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(0x69482fff))),attrs);
@@ -83,12 +83,17 @@ public final class WorldRenderer {
             Material rockDarkMat=new Material(ColorAttribute.createDiffuse(new Color(0x4d504eff)));
             rock=builder.createSphere(1.0f,.68f,.82f,7,4,rockMat,attrs);
             rockDark=builder.createSphere(.78f,.52f,.64f,7,4,rockDarkMat,attrs);
+            Material tuftMat=new Material(ColorAttribute.createDiffuse(new Color(0x536b3fff)));
+            Material bushMat=new Material(ColorAttribute.createDiffuse(new Color(0x3f683fff)));
+            grassTuft=builder.createCone(.18f,.62f,.18f,5,tuftMat,attrs);
+            bush=builder.createSphere(1.35f,.62f,1.0f,8,5,bushMat,attrs);
 
             // Keep terrain lighting restrained so the ground does not wash out.
             batch=new ModelBatch();environment=new Environment();
             environment.set(new ColorAttribute(ColorAttribute.AmbientLight,.34f,.36f,.37f,1f));
             environment.set(new ColorAttribute(ColorAttribute.Fog,.47f,.62f,.70f,1f));
-            environment.add(new DirectionalLight().set(.72f,.66f,.56f,-1f,-2f,-.45f));
+            environment.add(new DirectionalLight().set(.82f,.72f,.58f,-1f,-2f,-.45f));
+            environment.add(new DirectionalLight().set(.12f,.15f,.16f,.55f,-.4f,.7f));
             created=true;
         }catch(Throwable failure){dispose();throw new IllegalStateException("Renderer initialization failed",failure);}
     }
@@ -186,7 +191,9 @@ public final class WorldRenderer {
                 addInstance(pending,b.type,b.x,b.y,b.z,1f);
                 if(b.type==BlockType.GRASS && world.getBlock(b.x,b.y+1,b.z)==null){
                     int roll=Math.floorMod(b.x*92821+b.z*68917,1000);
-                    if(roll<24)addRock(pending,b);
+                    if(roll<18)addRock(pending,b);
+                    else if(roll<42)addGroundBush(pending,b);
+                    else if(roll<112)addGrassTuft(pending,b);
                 }
             }
         }
@@ -217,6 +224,23 @@ public final class WorldRenderer {
     private boolean isCactusBase(World world,World.Block b){
         World.Block below=world.getBlock(b.x,b.y-1,b.z);
         return below==null||below.type!=BlockType.CACTUS;
+    }
+
+    private void addGrassTuft(Map<Long,Array<ModelInstance>> pending,World.Block b){
+        long hash=World.key(b.x,b.y,b.z)*0xD6E8FEB86659FD93L;
+        float seed=(float)((hash>>>20)&0xffff)/65535f;
+        float ox=((float)((hash>>>6)&255)/255f-.5f)*.58f;
+        float oz=((float)((hash>>>14)&255)/255f-.5f)*.58f;
+        addProp(pending,grassTuft,b.x+ox,b.y+.54f,b.z+oz,.72f+seed*.5f,(seed-.5f)*18f,seed*130f,0f);
+        if(seed>.58f)addProp(pending,grassTuft,b.x-ox*.45f,b.y+.50f,b.z-oz*.45f,.48f+seed*.28f,-(seed-.5f)*14f,seed*80f,0f);
+    }
+
+    private void addGroundBush(Map<Long,Array<ModelInstance>> pending,World.Block b){
+        long hash=World.key(b.x,b.y,b.z)*0x9E3779B97F4A7C15L;
+        float seed=(float)((hash>>>16)&0xffff)/65535f;
+        float ox=((float)((hash>>>4)&255)/255f-.5f)*.45f;
+        float oz=((float)((hash>>>12)&255)/255f-.5f)*.45f;
+        addProp(pending,bush,b.x+ox,b.y+.42f,b.z+oz,.42f+seed*.30f,(seed-.5f)*12f,seed*160f,(seed-.5f)*8f);
     }
 
     private void addRock(Map<Long,Array<ModelInstance>> pending,World.Block b){
@@ -304,7 +328,11 @@ public final class WorldRenderer {
 
     private void addProp(Map<Long,Array<ModelInstance>> pending,Model model,float x,float y,float z,float scale,float rotX,float rotY,float rotZ){
         ModelInstance i=new ModelInstance(model);
-        i.transform.setToTranslation(x,y,z).scale(scale,scale,scale);
+        if(type==BlockType.GRASS){
+            i.transform.setToTranslation(x,y+.30f,z).scale(scale*1.02f,scale,scale*1.02f);
+        } else {
+            i.transform.setToTranslation(x,y,z).scale(scale,scale,scale);
+        }
         if(rotX!=0)i.transform.rotate(Vector3.X,rotX);
         if(rotY!=0)i.transform.rotate(Vector3.Y,rotY);
         if(rotZ!=0)i.transform.rotate(Vector3.Z,rotZ);
@@ -355,8 +383,8 @@ public final class WorldRenderer {
         for(int i=0;i<models.length;i++){Model model=models[i];models[i]=null;if(model!=null)try{model.dispose();}catch(Throwable ignored){}}
         for(int i=1;i<grassVariants.length;i++)if(grassVariants[i]!=null)try{grassVariants[i].dispose();}catch(Throwable ignored){}
         for(int i=1;i<dirtVariants.length;i++)if(dirtVariants[i]!=null)try{dirtVariants[i].dispose();}catch(Throwable ignored){}
-        Model[] props={treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip,rock,rockDark};
-        treeTrunk=treeTrunkTop=treeBranch=treeBranchThin=treeLeaf=treeLeafDark=cactusBody=cactusArm=cactusTip=rock=rockDark=null;
+        Model[] props={treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip,rock,rockDark,grassTuft,bush};
+        treeTrunk=treeTrunkTop=treeBranch=treeBranchThin=treeLeaf=treeLeafDark=cactusBody=cactusArm=cactusTip=rock=rockDark=grassTuft=bush=null;
         for(Model model:props)if(model!=null)try{model.dispose();}catch(Throwable ignored){}
         environment=null;created=false;cachedRevision=-1;
     }
