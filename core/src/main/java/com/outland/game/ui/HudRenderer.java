@@ -45,7 +45,7 @@ public final class HudRenderer {
         batch.begin();
         try {
             // Keep diagnostics readable but out of the control zones.
-            for(int i=0;i<Math.min(lines.length,5);i++) font.draw(batch,lines[i],14,height-16-i*22);
+            for(int i=0;i<Math.min(lines.length,7);i++) font.draw(batch,lines[i],14,height-16-i*22);
 
             font.draw(batch,"●",cx-8f*scale,cy+7f*scale);
             // Top row: NEXT / JUMP. Bottom row: MINE / PLACE.
