@@ -297,7 +297,7 @@ public final class WorldRenderer {
         for(Chunk chunk:chunks.values())chunk.dispose();
         chunks.clear();
         blocksByChunk.clear();
-        for(int i=0;i<models.length;i(){Model model=models[i];models[i]=null;if(model!=null)try{model.dispose();}catch(Throwable ignored){}}
+        for(int i=0;i<models.length;i++){Model model=models[i];models[i]=null;if(model!=null)try{model.dispose();}catch(Throwable ignored){}}
         Model[] props={treeTrunk,treeBranch,treeLeaf,cactusBody,cactusArm,cactusTip};
         treeTrunk=treeBranch=treeLeaf=cactusBody=cactusArm=cactusTip=null;
         for(Model model:props)if(model!=null)try{model.dispose();}catch(Throwable ignored){}
