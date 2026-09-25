@@ -53,9 +53,9 @@ public final class WorldRenderer {
             models[BlockType.GRASS.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[0]))),attrs);
             models[BlockType.DIRT.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[1]))),attrs);
             models[BlockType.STONE.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[2]))),attrs);
-            models[BlockType.WOOD.id()]=builder.createCylinder(.34f,1f,.34f,8,new Material(ColorAttribute.createDiffuse(new Color(colors[3]))),attrs);
-            models[BlockType.LEAVES.id()]=builder.createSphere(1.05f,1.05f,1.05f,8,5,new Material(ColorAttribute.createDiffuse(new Color(colors[4]))),attrs);
-            models[BlockType.CACTUS.id()]=builder.createCylinder(.38f,1f,.38f,10,new Material(ColorAttribute.createDiffuse(new Color(colors[5]))),attrs);
+            models[BlockType.WOOD.id()]=builder.createCylinder(.22f,1f,.22f,8,new Material(ColorAttribute.createDiffuse(new Color(colors[3]))),attrs);
+            models[BlockType.LEAVES.id()]=builder.createSphere(.78f,.78f,.78f,8,5,new Material(ColorAttribute.createDiffuse(new Color(colors[4]))),attrs);
+            models[BlockType.CACTUS.id()]=builder.createCylinder(.18f,1f,.18f,10,new Material(ColorAttribute.createDiffuse(new Color(colors[5]))),attrs);
             models[BlockType.URANIUM.id()]=builder.createSphere(1.05f,.85f,.92f,7,4,new Material(ColorAttribute.createDiffuse(new Color(colors[6]))),attrs);
             batch=new ModelBatch();environment=new Environment();
             environment.set(new ColorAttribute(ColorAttribute.AmbientLight,.38f,.40f,.43f,1f));
