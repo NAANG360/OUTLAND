@@ -21,6 +21,20 @@ public final class World {
     public long revision() { return revision; }
     public int size() { return blocks.size(); }
     public Block getBlock(int x,int y,int z) { return blocks.get(key(x,y,z)); }
+
+    /** Highest currently stored solid voxel in a column, so mined blocks really open holes. */
+    public int highestSolidY(int x,int z) {
+        for(int y=511;y>=-512;y--) {
+            Block block=blocks.get(key(x,y,z));
+            if(block!=null && isSolid(block.type)) return y;
+        }
+        return -513;
+    }
+
+    public static boolean isSolid(BlockType type) {
+        return type==BlockType.GRASS || type==BlockType.DIRT || type==BlockType.STONE
+                || type==BlockType.WOOD || type==BlockType.CACTUS;
+    }
     public boolean setBlock(int x,int y,int z,BlockType type) {
         long k=key(x,y,z); if(blocks.containsKey(k)) return false;
         blocks.put(k,new Block(x,y,z,type)); revision++; markChanged(k); return true;
