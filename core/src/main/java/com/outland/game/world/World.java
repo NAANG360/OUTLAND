@@ -23,6 +23,11 @@ public final class World {
         long k=key(x,y,z); if(blocks.containsKey(k)) return false;
         blocks.put(k,new Block(x,y,z,type)); revision++; return true;
     }
+    /** Replaces an existing block in one revision step; false when no block exists. */
+    public boolean replaceBlock(int x,int y,int z,BlockType type) {
+        long k=key(x,y,z); if(!blocks.containsKey(k)) return false;
+        blocks.put(k,new Block(x,y,z,type)); revision++; return true;
+    }
     public Block removeBlock(int x,int y,int z) {
         Block removed=blocks.remove(key(x,y,z)); if(removed!=null) revision++; return removed;
     }
