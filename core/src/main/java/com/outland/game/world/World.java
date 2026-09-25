@@ -31,6 +31,19 @@ public final class World {
         return -513;
     }
 
+    /** Highest terrain voxel, ignoring trees and other props above the ground. */
+    public int highestTerrainY(int x,int z) {
+        for(int y=511;y>=-512;y--) {
+            Block block=blocks.get(key(x,y,z));
+            if(block!=null && isTerrain(block.type)) return y;
+        }
+        return -513;
+    }
+
+    public static boolean isTerrain(BlockType type) {
+        return type==BlockType.GRASS || type==BlockType.DIRT || type==BlockType.STONE;
+    }
+
     public static boolean isSolid(BlockType type) {
         return type==BlockType.GRASS || type==BlockType.DIRT || type==BlockType.STONE
                 || type==BlockType.WOOD || type==BlockType.CACTUS;
