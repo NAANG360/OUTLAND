@@ -21,6 +21,7 @@ public final class WorldRenderer {
 
     private final Model[] models=new Model[BlockType.values().length];
     private final Map<Long,Chunk> chunks=new HashMap<>();
+    private final Map<Long,Map<Long,World.Block>> blocksByChunk=new HashMap<>();
     private final Vector3 scratch=new Vector3();
     private Model treeTrunk,treeBranch,treeLeaf,cactusBody,cactusArm,cactusTip;
     private ModelBatch batch;
@@ -50,6 +51,7 @@ public final class WorldRenderer {
             models[BlockType.GRASS.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[0]))),attrs);
             models[BlockType.DIRT.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[1]))),attrs);
             models[BlockType.STONE.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[2]))),attrs);
+            models[BlockType.URANIUM.id()]=builder.createSphere(1.05f,.85f,.92f,7,4,new Material(ColorAttribute.createDiffuse(new Color(colors[6]))),attrs);
 
             Material trunkMat=new Material(ColorAttribute.createDiffuse(new Color(0x69452fff)));
             Material barkMat=new Material(ColorAttribute.createDiffuse(new Color(0x533521ff)));
@@ -92,39 +94,98 @@ public final class WorldRenderer {
 
     private void sync(World world){
         if(cachedRevision==world.revision())return;
-        for(Chunk chunk:chunks.values())chunk.dispose();
-        chunks.clear();
 
-        Map<Long,Array<ModelInstance>> pending=new HashMap<>();
-        for(World.Block b:world.snapshot()){
-            if(b.type==BlockType.WOOD && isTreeBase(world,b)){
-                addTree(pending,b);
-                continue;
-            }
-            if(b.type==BlockType.WOOD || b.type==BlockType.LEAVES || b.type==BlockType.CACTUS){
-                // Organic props are rendered as continuous silhouettes below.
-                continue;
-            }
-
-            boolean base=b.type==BlockType.GRASS||b.type==BlockType.DIRT||b.type==BlockType.STONE;
-            if(base&&isFullyEnclosed(world,b))continue;
-
-            addInstance(pending,b.type,b.x,b.y,b.z,1f);
+        Long changedKey=world.consumeChangedBlockKey();
+        if(cachedRevision<0 || changedKey==null){
+            rebuildAll(world);
+            cachedRevision=world.revision();
+            world.consumeChangedBlockKey();
+            return;
         }
 
-        // Render cactus plants from their bottom block, so four 1-unit cylinders
-        // cannot turn into the disconnected "telephone pole" look.
-        for(World.Block b:world.snapshot()){
-            if(b.type==BlockType.CACTUS && isCactusBase(world,b)) addCactus(pending,world,b);
-        }
+        updateBlockIndex(world,changedKey);
+        int changedX=World.xFromKey(changedKey), changedZ=World.zFromKey(changedKey);
+        int changedCx=Math.floorDiv(changedX,CHUNK_SIZE), changedCz=Math.floorDiv(changedZ,CHUNK_SIZE);
 
-        for(Map.Entry<Long,Array<ModelInstance>> entry:pending.entrySet()){
-            int cx=(int)(entry.getKey()>>32),cz=(int)(long)entry.getKey();
-            Chunk chunk=new Chunk(cx,cz);
-            chunk.build(entry.getValue());
-            chunks.put(entry.getKey(),chunk);
+        // Terrain exposure and organic props can cross a chunk edge, so rebuild
+        // the changed chunk plus its immediate 8 neighbors only.
+        for(int dz=-1;dz<=1;dz++) for(int dx=-1;dx<=1;dx++){
+            int cx=changedCx+dx,cz=changedCz+dz;
+            long key=chunkKey(cx,cz);
+            Chunk old=chunks.remove(key);
+            if(old!=null)old.dispose();
+            Chunk rebuilt=buildChunk(world,cx,cz);
+            if(rebuilt!=null)chunks.put(key,rebuilt);
         }
         cachedRevision=world.revision();
+    }
+
+    private void rebuildAll(World world){
+        for(Chunk chunk:chunks.values())chunk.dispose();
+        chunks.clear();
+        blocksByChunk.clear();
+
+        for(World.Block b:world.snapshot()){
+            long key=chunkKey(Math.floorDiv(b.x,CHUNK_SIZE),Math.floorDiv(b.z,CHUNK_SIZE));
+            Map<Long,World.Block> list=blocksByChunk.get(key);
+            if(list==null){list=new HashMap<>();blocksByChunk.put(key,list);}
+            list.put(World.key(b.x,b.y,b.z),b);
+        }
+
+        for(long key:blocksByChunk.keySet()){
+            int cx=(int)(key>>32),cz=(int)key;
+            Chunk rebuilt=buildChunk(world,cx,cz);
+            if(rebuilt!=null)chunks.put(key,rebuilt);
+        }
+    }
+
+    private void updateBlockIndex(World world,long changedKey){
+        int x=World.xFromKey(changedKey),z=World.zFromKey(changedKey);
+        long chunk=chunkKey(Math.floorDiv(x,CHUNK_SIZE),Math.floorDiv(z,CHUNK_SIZE));
+        Map<Long,World.Block> list=blocksByChunk.get(chunk);
+        World.Block current=world.getBlock(x,World.yFromKey(changedKey),z);
+        if(current==null){
+            if(list!=null){
+                list.remove(changedKey);
+                if(list.isEmpty())blocksByChunk.remove(chunk);
+            }
+        }else{
+            if(list==null){list=new HashMap<>();blocksByChunk.put(chunk,list);}
+            list.put(changedKey,current);
+        }
+    }
+
+    private Chunk buildChunk(World world,int cx,int cz){
+        Map<Long,Array<ModelInstance>> pending=new HashMap<>();
+        long targetKey=chunkKey(cx,cz);
+
+        // Terrain cells belong to their own chunk.
+        Map<Long,World.Block> own=blocksByChunk.get(targetKey);
+        if(own!=null){
+            for(World.Block b:own.values()){
+                boolean base=b.type==BlockType.GRASS||b.type==BlockType.DIRT||b.type==BlockType.STONE;
+                if(base&&isFullyEnclosed(world,b))continue;
+                if(b.type==BlockType.WOOD||b.type==BlockType.LEAVES||b.type==BlockType.CACTUS)continue;
+                addInstance(pending,b.type,b.x,b.y,b.z,1f);
+            }
+        }
+
+        // Props may straddle chunk boundaries. Read only the surrounding 3x3
+        // chunk index instead of rescanning all ~17k world blocks per interaction.
+        for(int dz=-1;dz<=1;dz++) for(int dx=-1;dx<=1;dx++){
+            Map<Long,World.Block> nearby=blocksByChunk.get(chunkKey(cx+dx,cz+dz));
+            if(nearby==null)continue;
+            for(World.Block b:nearby.values()){
+                if(b.type==BlockType.WOOD&&isTreeBase(world,b))addTree(pending,b);
+                else if(b.type==BlockType.CACTUS&&isCactusBase(world,b))addCactus(pending,world,b);
+            }
+        }
+
+        Array<ModelInstance> instances=pending.get(targetKey);
+        if(instances==null||instances.size==0)return null;
+        Chunk chunk=new Chunk(cx,cz);
+        chunk.build(instances);
+        return chunk;
     }
 
     private boolean isTreeBase(World world,World.Block b){
@@ -217,12 +278,16 @@ public final class WorldRenderer {
     }
 
     private static boolean isFullyEnclosed(World world,World.Block b){
-        return world.getBlock(b.x,b.y+1,b.z)!=null
-                &&world.getBlock(b.x,b.y-1,b.z)!=null
-                &&world.getBlock(b.x+1,b.y,b.z)!=null
-                &&world.getBlock(b.x-1,b.y,b.z)!=null
-                &&world.getBlock(b.x,b.y,b.z+1)!=null
-                &&world.getBlock(b.x,b.y,b.z-1)!=null;
+        return isOpaqueTerrainCell(world.getBlock(b.x,b.y+1,b.z))
+                &&isOpaqueTerrainCell(world.getBlock(b.x,b.y-1,b.z))
+                &&isOpaqueTerrainCell(world.getBlock(b.x+1,b.y,b.z))
+                &&isOpaqueTerrainCell(world.getBlock(b.x-1,b.y,b.z))
+                &&isOpaqueTerrainCell(world.getBlock(b.x,b.y,b.z+1))
+                &&isOpaqueTerrainCell(world.getBlock(b.x,b.y,b.z-1));
+    }
+
+    private static boolean isOpaqueTerrainCell(World.Block block){
+        return block!=null&&(block.type==BlockType.GRASS||block.type==BlockType.DIRT||block.type==BlockType.STONE);
     }
 
     private static long chunkKey(int cx,int cz){return ((long)cx<<32)^(cz&0xffffffffL);}
@@ -231,7 +296,8 @@ public final class WorldRenderer {
         ModelBatch oldBatch=batch;batch=null;if(oldBatch!=null)try{oldBatch.dispose();}catch(Throwable ignored){}
         for(Chunk chunk:chunks.values())chunk.dispose();
         chunks.clear();
-        for(int i=0;i<models.length;i++){Model model=models[i];models[i]=null;if(model!=null)try{model.dispose();}catch(Throwable ignored){}}
+        blocksByChunk.clear();
+        for(int i=0;i<models.length;i(){Model model=models[i];models[i]=null;if(model!=null)try{model.dispose();}catch(Throwable ignored){}}
         Model[] props={treeTrunk,treeBranch,treeLeaf,cactusBody,cactusArm,cactusTip};
         treeTrunk=treeBranch=treeLeaf=cactusBody=cactusArm=cactusTip=null;
         for(Model model:props)if(model!=null)try{model.dispose();}catch(Throwable ignored){}
