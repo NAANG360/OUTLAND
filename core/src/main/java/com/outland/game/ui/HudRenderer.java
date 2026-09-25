@@ -23,8 +23,8 @@ public final class HudRenderer {
 
         // Touch controls: thumbstick on the lower-left; action cluster on lower-right.
         float scale=Math.max(.72f,Math.min(width,height)/800f);
-        float cx=96f*scale, cy=height-96f*scale, base=58f*scale, knob=25f*scale;
-        float bx=width-82f*scale, by=height-78f*scale, r=30f*scale, gap=72f*scale;
+        float cx=96f*scale, cy=96f*scale, base=58f*scale, knob=25f*scale;
+        float bx=width-82f*scale, by=78f*scale, r=30f*scale, gap=72f*scale;
 
         shapes.setProjectionMatrix(new Matrix4().setToOrtho2D(0,0,width,height));
         shapes.begin(ShapeRenderer.ShapeType.Filled);
