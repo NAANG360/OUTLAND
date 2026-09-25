@@ -150,7 +150,7 @@ public final class OutlandGame extends ApplicationAdapter {
             else if(movePointer<0)input.strafe=0;
             if(Gdx.input.isKeyJustPressed(Input.Keys.SPACE))input.jump=true;
             if(input.nextBlock){player.selectedBlock=(player.selectedBlock+1)%BlockType.values().length;input.nextBlock=false;}
-            playerController.update(player,input,dt,seed);
+            playerController.update(player,input,dt,world);
             if(input.mine)interact(false);
             if(input.place)interact(true);
             input.clearTransient();
