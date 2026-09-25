@@ -102,6 +102,9 @@ public final class OutlandGame extends ApplicationAdapter {
                 float hudY=height-y;
                 float scale=Math.max(.72f,Math.min(width,height)/800f);
                 float bx=width-82f*scale,by=78f*scale,r=30f*scale,gap=72f*scale;
+                float slot=48f*scale,slotGap=5f*scale;
+                float hotbarWidth=BlockType.values().length*slot+(BlockType.values().length-1)*slotGap;
+                float hotbarX=(width-hotbarWidth)*.5f,hotbarY=20f*scale;
                 // Hit the same four circles HudRenderer draws; do not approximate them with
                 // normalized screen bands, which made both columns overlap on narrow phones.
                 float dx= x-(bx-gap),dy=hudY-(by+gap);
@@ -112,6 +115,13 @@ public final class OutlandGame extends ApplicationAdapter {
                 if(dx*dx+dy*dy<=r*r){input.mine=true;return true;}
                 dx=x-bx;dy=hudY-by;
                 if(dx*dx+dy*dy<=r*r){input.place=true;return true;}
+                if(hudY>=hotbarY-2f*scale&&hudY<=hotbarY+slot+2f*scale&&x>=hotbarX-2f*scale&&x<=hotbarX+hotbarWidth+2f*scale){
+                    int selected=MathUtils.floor((x-hotbarX)/(slot+slotGap));
+                    if(selected>=0&&selected<BlockType.values().length){
+                        float local=x-(hotbarX+selected*(slot+slotGap));
+                        if(local<=slot){player.selectedBlock=selected;return true;}
+                    }
+                }
                 if(x>width*.42f){lookPointer=pointer;lastLookX=x;lastLookY=y;}
                 else {movePointer=pointer;moveOriginX=x;moveOriginY=hudY;input.forward=0;input.strafe=0;}
                 return true;
@@ -167,7 +177,7 @@ public final class OutlandGame extends ApplicationAdapter {
                 "4 Wood "+player.inventory[BlockType.WOOD.id()]+"   5 Leaves "+player.inventory[BlockType.LEAVES.id()]+"   6 Cactus "+player.inventory[BlockType.CACTUS.id()]+"   7 Uranium "+player.inventory[BlockType.URANIUM.id()],
                 "Selected: "+BlockType.values()[player.selectedBlock],
                 status,"MOVE: left · LOOK: right drag"};
-            hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),lines);
+            hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),lines,player.selectedBlock,player.inventory);
         }catch(Throwable failure){
             fatalMessage=failure.getClass().getSimpleName()+": "+String.valueOf(failure.getMessage());
             logError("Runtime failure",failure);
@@ -206,7 +216,7 @@ public final class OutlandGame extends ApplicationAdapter {
 
     private void drawSafeMode(){
         Gdx.gl.glClearColor(.08f,.08f,.10f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),new String[]{"OUTLAND SAFE MODE","Failure at: "+status,String.valueOf(fatalMessage),"Private diagnostic journal: app files/outlandlogs/runtime.log"});
+        hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),new String[]{"OUTLAND SAFE MODE","Failure at: "+status,String.valueOf(fatalMessage),"Private diagnostic journal: app files/outlandlogs/runtime.log"},player.selectedBlock,player.inventory);
     }
     @Override public void resize(int width,int height){if(camera!=null){camera.viewportWidth=Math.max(1,width);camera.viewportHeight=Math.max(1,height);camera.update();}}
     @Override public void pause(){stage("lifecycle.pause");saveWorld();}
