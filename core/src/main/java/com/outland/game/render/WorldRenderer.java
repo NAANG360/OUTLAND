@@ -20,10 +20,12 @@ public final class WorldRenderer {
     private static final float RENDER_RADIUS=42f;
 
     private final Model[] models=new Model[BlockType.values().length];
+    private final Model[] grassVariants=new Model[3];
+    private final Model[] dirtVariants=new Model[2];
     private final Map<Long,Chunk> chunks=new HashMap<>();
     private final Map<Long,Map<Long,World.Block>> blocksByChunk=new HashMap<>();
     private final Vector3 scratch=new Vector3();
-    private Model treeTrunk,treeBranch,treeLeaf,cactusBody,cactusArm,cactusTip;
+    private Model treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip;
     private ModelBatch batch;
     private Environment environment;
     private long cachedRevision=-1;
@@ -45,33 +47,44 @@ public final class WorldRenderer {
     public void create(){
         if(created)return;
         ModelBuilder builder=new ModelBuilder();
-        int[] colors={0x68a94fff,0x8a603fff,0x858b91ff,0x79502fff,0x438443ff,0x4f9f54ff,0x77a96aff};
+        int[] colors={0x5f8f4fff,0x765238ff,0x777b7aff,0x6b4734ff,0x3f743fff,0x4b914bff,0x7dbb68ff};
         try{
             long attrs=VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal;
             models[BlockType.GRASS.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[0]))),attrs);
+            grassVariants[0]=models[BlockType.GRASS.id()];
+            grassVariants[1]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(0x668f50ff))),attrs);
+            grassVariants[2]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(0x587f47ff))),attrs);
             models[BlockType.DIRT.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[1]))),attrs);
+            dirtVariants[0]=models[BlockType.DIRT.id()];
+            dirtVariants[1]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(0x69482fff))),attrs);
             models[BlockType.STONE.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[2]))),attrs);
             models[BlockType.URANIUM.id()]=builder.createSphere(1.05f,.85f,.92f,7,4,new Material(ColorAttribute.createDiffuse(new Color(colors[6]))),attrs);
 
-            Material trunkMat=new Material(ColorAttribute.createDiffuse(new Color(0x69452fff)));
-            Material barkMat=new Material(ColorAttribute.createDiffuse(new Color(0x533521ff)));
-            Material leafMat=new Material(ColorAttribute.createDiffuse(new Color(0x39733cff)));
+            Material trunkMat=new Material(ColorAttribute.createDiffuse(new Color(0x66442fff)));
+            Material trunkDarkMat=new Material(ColorAttribute.createDiffuse(new Color(0x503624ff)));
+            Material barkMat=new Material(ColorAttribute.createDiffuse(new Color(0x573925ff)));
+            Material leafMat=new Material(ColorAttribute.createDiffuse(new Color(0x32653aff)));
+            Material leafDarkMat=new Material(ColorAttribute.createDiffuse(new Color(0x285531ff)));
             
             Material cactusMat=new Material(ColorAttribute.createDiffuse(new Color(0x4f9f54ff)));
 
             // One-piece-ish stylized tree parts. Multiple organic lobes beat the
             // old isolated green balls while staying cheap enough for Android.
-            treeTrunk=builder.createCylinder(.30f,3.9f,.30f,9,trunkMat,attrs);
-            treeBranch=builder.createCylinder(.15f,1.35f,.15f,8,barkMat,attrs);
-            treeLeaf=builder.createSphere(1f,.72f,.92f,8,6,leafMat,attrs);
+            treeTrunk=builder.createCylinder(.38f,3.2f,.38f,9,trunkMat,attrs);
+            treeTrunkTop=builder.createCylinder(.27f,2.0f,.27f,9,trunkDarkMat,attrs);
+            treeBranch=builder.createCylinder(.13f,1.05f,.13f,8,barkMat,attrs);
+            treeBranchThin=builder.createCylinder(.09f,.78f,.09f,7,barkMat,attrs);
+            treeLeaf=builder.createSphere(1.35f,.82f,1.05f,8,6,leafMat,attrs);
+            treeLeafDark=builder.createSphere(1.05f,.66f,.86f,8,6,leafDarkMat,attrs);
             cactusBody=builder.createCylinder(.34f,3.5f,.34f,10,cactusMat,attrs);
             cactusArm=builder.createCylinder(.22f,1.05f,.22f,10,cactusMat,attrs);
             cactusTip=builder.createSphere(.36f,.28f,.36f,10,6,cactusMat,attrs);
 
             // Keep terrain lighting restrained so the ground does not wash out.
             batch=new ModelBatch();environment=new Environment();
-            environment.set(new ColorAttribute(ColorAttribute.AmbientLight,.38f,.40f,.43f,1f));
-            environment.add(new DirectionalLight().set(.55f,.52f,.46f,-1f,-2f,-.5f));
+            environment.set(new ColorAttribute(ColorAttribute.AmbientLight,.34f,.36f,.37f,1f));
+            environment.set(new ColorAttribute(ColorAttribute.Fog,.47f,.62f,.70f,1f));
+            environment.add(new DirectionalLight().set(.72f,.66f,.56f,-1f,-2f,-.45f));
             created=true;
         }catch(Throwable failure){dispose();throw new IllegalStateException("Renderer initialization failed",failure);}
     }
@@ -199,19 +212,26 @@ public final class WorldRenderer {
     }
 
     private void addTree(Map<Long,Array<ModelInstance>> pending,World.Block b){
-        float seed=Math.abs(World.key(b.x,b.y,b.z)%1000)/1000f;
-        float lean=(seed-.5f)*14f;
-        addProp(pending,treeTrunk,b.x,b.y+1.45f,b.z,1f,lean,0f,0f);
+        float seed=Math.abs(World.key(b.x,b.y,b.z)%10000)/10000f;
+        float lean=(seed-.5f)*8f;
+        float sway=(seed*.7f-.35f)*10f;
 
-        addBranch(pending,b.x,b.y+1.9f,b.z,b.x+0.7f,b.y+2.35f,b.z,lean);
-        addBranch(pending,b.x,b.y+2.35f,b.z,b.x-0.55f,b.y+2.8f,b.z,lean);
-        addBranch(pending,b.x,b.y+2.7f,b.z,b.x,b.y+3.05f,b.z+0.65f,lean);
+        addProp(pending,treeTrunk,b.x,b.y+1.35f,b.z,1f,lean,0f,0f);
+        addProp(pending,treeTrunkTop,b.x+.03f,b.y+3.15f,b.z-.02f,.92f,lean*.65f,0f,0f);
 
-        addLeaf(pending,b.x,b.y+3.0f,b.z,1.00f);
-        addLeaf(pending,b.x+0.72f,b.y+2.7f,b.z+0.05f,.72f);
-        addLeaf(pending,b.x-0.62f,b.y+3.0f,b.z+0.10f,.66f);
-        addLeaf(pending,b.x+0.10f,b.y+3.15f,b.z-0.68f,.76f);
-        addLeaf(pending,b.x-0.05f,b.y+3.55f,b.z+0.05f,.58f);
+        // Branches leave the trunk gradually and terminate inside the canopy.
+        addBranch(pending,b.x,b.y+2.25f,b.z,b.x+.72f,b.y+2.72f,b.z+.10f,lean);
+        addBranch(pending,b.x,b.y+2.85f,b.z,b.x-.62f,b.y+3.28f,b.z+.08f,sway);
+        addBranch(pending,b.x+.03f,b.y+3.25f,b.z,b.x+.12f,b.y+3.72f,b.z+.58f,sway);
+        addThinBranch(pending,b.x+.02f,b.y+3.55f,b.z,b.x+.62f,b.y+3.9f,b.z-.35f);
+
+        // Layered, offset foliage gives a natural crown instead of a lollipop.
+        addLeaf(pending,b.x-.10f,b.y+3.25f,b.z+.05f,1.00f,false);
+        addLeaf(pending,b.x+.62f,b.y+3.05f,b.z+.08f,.76f,true);
+        addLeaf(pending,b.x-.60f,b.y+3.48f,b.z+.10f,.72f,true);
+        addLeaf(pending,b.x+.12f,b.y+3.78f,b.z+.48f,.70f,false);
+        addLeaf(pending,b.x+.20f,b.y+4.02f,b.z-.35f,.58f,true);
+        addLeaf(pending,b.x-.05f,b.y+4.18f,b.z+.02f,.54f,false);
     }
 
     private void addBranch(Map<Long,Array<ModelInstance>> pending,float x1,float y1,float z1,float x2,float y2,float z2,float lean){
@@ -226,8 +246,19 @@ public final class WorldRenderer {
         add(pending,i,(int)Math.floor((x1+x2)*.5f),(int)Math.floor((z1+z2)*.5f));
     }
 
-    private void addLeaf(Map<Long,Array<ModelInstance>> pending,float x,float y,float z,float scale){
-        addProp(pending,treeLeaf,x,y,z,scale,0f,0f,0f);
+    private void addThinBranch(Map<Long,Array<ModelInstance>> pending,float x1,float y1,float z1,float x2,float y2,float z2){
+        float dx=x2-x1,dy=y2-y1,dz=z2-z1;
+        float len=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+        ModelInstance i=new ModelInstance(treeBranchThin);
+        i.transform.setToTranslation((x1+x2)*.5f,(y1+y2)*.5f,(z1+z2)*.5f);
+        i.transform.scale(1f,len/.78f,1f);
+        i.transform.rotate(Vector3.Z,(float)Math.toDegrees(Math.atan2(dx,dy)));
+        i.transform.rotate(Vector3.X,-(float)Math.toDegrees(Math.atan2(dz,dy)));
+        add(pending,i,(int)Math.floor((x1+x2)*.5f),(int)Math.floor((z1+z2)*.5f));
+    }
+
+    private void addLeaf(Map<Long,Array<ModelInstance>> pending,float x,float y,float z,float scale,boolean dark){
+        addProp(pending,dark?treeLeafDark:treeLeaf,x,y,z,scale,0f,0f,0f);
     }
 
     private void addCactus(Map<Long,Array<ModelInstance>> pending,World world,World.Block b){
@@ -272,7 +303,10 @@ public final class WorldRenderer {
     }
 
     private void addInstance(Map<Long,Array<ModelInstance>> pending,BlockType type,int x,int y,int z,float scale){
-        ModelInstance i=new ModelInstance(models[type.id()]);
+        Model model=models[type.id()];
+        if(type==BlockType.GRASS)model=grassVariants[Math.floorMod(x*31+z*17,grassVariants.length)];
+        else if(type==BlockType.DIRT)model=dirtVariants[Math.floorMod(x*13+z*29,dirtVariants.length)];
+        ModelInstance i=new ModelInstance(model);
         i.transform.setToTranslation(x,y,z).scale(scale,scale,scale);
         add(pending,i,x,z);
     }
@@ -298,8 +332,10 @@ public final class WorldRenderer {
         chunks.clear();
         blocksByChunk.clear();
         for(int i=0;i<models.length;i++){Model model=models[i];models[i]=null;if(model!=null)try{model.dispose();}catch(Throwable ignored){}}
-        Model[] props={treeTrunk,treeBranch,treeLeaf,cactusBody,cactusArm,cactusTip};
-        treeTrunk=treeBranch=treeLeaf=cactusBody=cactusArm=cactusTip=null;
+        for(int i=1;i<grassVariants.length;i++)if(grassVariants[i]!=null)try{grassVariants[i].dispose();}catch(Throwable ignored){}
+        for(int i=1;i<dirtVariants.length;i++)if(dirtVariants[i]!=null)try{dirtVariants[i].dispose();}catch(Throwable ignored){}
+        Model[] props={treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip};
+        treeTrunk=treeTrunkTop=treeBranch=treeBranchThin=treeLeaf=treeLeafDark=cactusBody=cactusArm=cactusTip=null;
         for(Model model:props)if(model!=null)try{model.dispose();}catch(Throwable ignored){}
         environment=null;created=false;cachedRevision=-1;
     }
