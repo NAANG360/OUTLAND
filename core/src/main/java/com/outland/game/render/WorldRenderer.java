@@ -29,8 +29,9 @@ public final class WorldRenderer {
                 new Material(ColorAttribute.createDiffuse(new Color(colors[i]))),
                 VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal);
             batch=new ModelBatch(); environment=new Environment();
-            environment.set(new ColorAttribute(ColorAttribute.AmbientLight,.8f,.82f,.86f,1f));
-            environment.add(new DirectionalLight().set(.9f,.88f,.78f,-1f,-2f,-.5f));
+            // Softer outdoor lighting so the first scene is readable rather than washed out.
+            environment.set(new ColorAttribute(ColorAttribute.AmbientLight,.38f,.40f,.43f,1f));
+            environment.add(new DirectionalLight().set(.55f,.52f,.46f,-1f,-2f,-.5f));
             created=true;
         } catch(Throwable failure) { dispose(); throw new IllegalStateException("Renderer initialization failed",failure); }
     }
