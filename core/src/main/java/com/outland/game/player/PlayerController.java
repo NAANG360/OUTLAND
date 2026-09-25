@@ -28,7 +28,7 @@ public final class PlayerController {
         player.position.mulAdd(forward,input.forward*WALK_SPEED*dt)
                 .mulAdd(right,input.strafe*WALK_SPEED*dt);
 
-        int scanY=Math.min(511,MathUtils.floor(player.position.y)+4);
+        int scanY=Math.min(511,Math.max(64,MathUtils.floor(player.position.y)+4));
         int oldGround=world.highestTerrainY(MathUtils.round(oldPosition.x),MathUtils.round(oldPosition.z),scanY);
         int newGround=world.highestTerrainY(MathUtils.round(player.position.x),MathUtils.round(player.position.z),scanY);
         if(player.grounded && newGround>oldGround+MAX_STEP) {
