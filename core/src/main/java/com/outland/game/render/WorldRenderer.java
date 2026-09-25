@@ -35,13 +35,22 @@ public final class WorldRenderer {
         final int cx,cz;
         final ModelCache cache;
         final Vector3 center;
+        Model terrainModel;
+        ModelInstance terrainInstance;
         Chunk(int cx,int cz){
             this.cx=cx;this.cz=cz;
             this.cache=new ModelCache();
             this.center=new Vector3(cx*CHUNK_SIZE+CHUNK_SIZE*.5f,0,cz*CHUNK_SIZE+CHUNK_SIZE*.5f);
         }
-        void build(Array<ModelInstance> instances){cache.begin();cache.add(instances);cache.end();}
-        void dispose(){cache.dispose();}
+        void build(Array<ModelInstance> instances,Model terrain){
+            terrainModel=terrain;
+            terrainInstance=terrain==null?null:new ModelInstance(terrain);
+            cache.begin();cache.add(instances);cache.end();
+        }
+        void dispose(){
+            cache.dispose();
+            if(terrainModel!=null){try{terrainModel.dispose();}catch(Throwable ignored){} terrainModel=null;terrainInstance=null;}
+        }
     }
 
     public void create(){
@@ -108,7 +117,8 @@ public final class WorldRenderer {
                 float dx=scratch.x-playerPosition.x,dz=scratch.z-playerPosition.z;
                 if(dx*dx+dz*dz>RENDER_RADIUS*RENDER_RADIUS)continue;
                 scratch.y=playerPosition.y;
-                if(!camera.frustum.sphereInFrustum(scratch,CHUNK_SIZE*.9f))continue;
+                if(!camera.frustum.sphereInFrustum(scratch,CHUNK_SIZE*1.4f))continue;
+                if(chunk.terrainInstance!=null)batch.render(chunk.terrainInstance,environment);
                 batch.render(chunk.cache,environment);
             }
         }finally{batch.end();}
@@ -186,9 +196,10 @@ public final class WorldRenderer {
         if(own!=null){
             for(World.Block b:own.values()){
                 boolean base=b.type==BlockType.GRASS||b.type==BlockType.DIRT||b.type==BlockType.STONE;
-                if(base&&isFullyEnclosed(world,b))continue;
+                // Base terrain is drawn by the low-poly surface mesh below. Keep
+                // voxel terrain in storage/collision, but do not expose cube faces.
+                if(base)continue;
                 if(b.type==BlockType.WOOD||b.type==BlockType.LEAVES||b.type==BlockType.CACTUS)continue;
-                addInstance(pending,b.type,b.x,b.y,b.z,1f);
                 if(b.type==BlockType.GRASS && world.getBlock(b.x,b.y+1,b.z)==null){
                     int roll=Math.floorMod(b.x*92821+b.z*68917,1000);
                     if(roll<18)addRock(pending,b);
@@ -210,10 +221,85 @@ public final class WorldRenderer {
         }
 
         Array<ModelInstance> instances=pending.get(targetKey);
-        if(instances==null||instances.size==0)return null;
+        if(instances==null)instances=new Array<>();
+        Model terrainModel=buildTerrainSurface(world,cx,cz);
+        if(instances.size==0&&terrainModel==null)return null;
         Chunk chunk=new Chunk(cx,cz);
-        chunk.build(instances);
+        chunk.build(instances,terrainModel);
         return chunk;
+    }
+
+    /**
+     * Builds the visible ground as a sloped low-poly surface while World keeps
+     * its voxel representation for saves, mining and collision.
+     */
+    private Model buildTerrainSurface(World world,int cx,int cz){
+        ModelBuilder builder=new ModelBuilder();
+        long attrs=VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal;
+        Material grassMat=new Material(ColorAttribute.createDiffuse(new Color(0x6f7f4fff)));
+        Material dirtMat=new Material(ColorAttribute.createDiffuse(new Color(0x875a3cff)));
+        Material rockMat=new Material(ColorAttribute.createDiffuse(new Color(0x66645fff)));
+        MeshPartBuilder top=builder.part("ground",GL20.GL_TRIANGLES,attrs,grassMat);
+        MeshPartBuilder dirt=builder.part("sides",GL20.GL_TRIANGLES,attrs,dirtMat);
+        MeshPartBuilder rockSide=builder.part("rock",GL20.GL_TRIANGLES,attrs,rockMat);
+        boolean any=false;
+        Vector3 a=new Vector3(),b=new Vector3(),c=new Vector3(),d=new Vector3(),normal=new Vector3();
+
+        for(int x=cx*CHUNK_SIZE;x<cx*CHUNK_SIZE+CHUNK_SIZE;x++){
+            for(int z=cz*CHUNK_SIZE;z<cz*CHUNK_SIZE+CHUNK_SIZE;z++){
+                int h=world.highestTerrainY(x,z);
+                if(h<-512)continue;
+                any=true;
+                float y00=cornerHeight(world,x,z);
+                float y10=cornerHeight(world,x+1,z);
+                float y11=cornerHeight(world,x+1,z+1);
+                float y01=cornerHeight(world,x,z+1);
+                a.set(x-.5f,y00,z-.5f);
+                b.set(x+.5f,y10,z-.5f);
+                c.set(x+.5f,y11,z+.5f);
+                d.set(x-.5f,y01,z+.5f);
+                normal.set(d).sub(a).crs(new Vector3(b).sub(a)).nor();
+                if(normal.y<0)normal.scl(-1f);
+                top.rect(a,b,c,d,normal);
+
+                addTerrainEdge(world,dirt,rockSide,x,z,x+1,z,y10,y11);
+                addTerrainEdge(world,dirt,rockSide,x+1,z+1,z+1,x+1,y11,y10);
+                addTerrainEdge(world,dirt,rockSide,x,z+1,x,z,y01,y00);
+                addTerrainEdge(world,dirt,rockSide,x,z,x,z+1,y00,y01);
+            }
+        }
+        if(!any)return null;
+        return builder.end();
+    }
+
+    private float cornerHeight(World world,int x,int z){
+        float total=0f;int count=0;
+        int[] xs={x-1,x,x-1,x};
+        int[] zs={z-1,z-1,z,z};
+        for(int i=0;i<4;i++){
+            int h=world.highestTerrainY(xs[i],zs[i]);
+            if(h>=-512){total+=h+.5f;count++;}
+        }
+        if(count==0)return 0f;
+        return total/count;
+    }
+
+    private void addTerrainEdge(World world,MeshPartBuilder dirt,MeshPartBuilder rockSide,
+                                int x1,int z1,int x2,int z2,float top1,float top2){
+        int neighborH=world.highestTerrainY(x2,z2);
+        if(neighborH>=-512 && neighborH>=Math.min(top1-.5f,top2-.5f))return;
+        float bottom=Math.max(-1f,Math.min(top1,top2)-2.6f);
+        float nx=z2-z1;
+        float nz=-(x2-x1);
+        Vector3 n=new Vector3(nx,0,nz).nor();
+        if(n.len2()<.01f)n.set(0,1,0);
+        dirt.rect(x1-.5f,top1,x1+.5f, x2-.5f,top2,x2+.5f,
+                  x2-.5f,bottom,x2+.5f, x1-.5f,bottom,x1+.5f,n);
+        if(top1-bottom>.9f){
+            float band=Math.max(bottom,Math.min(top1,top2)-1.15f);
+            rockSide.rect(x1-.5f,band,x1+.5f, x2-.5f,Math.min(top2,band),x2+.5f,
+                          x2-.5f,bottom,x2+.5f, x1-.5f,bottom,x1+.5f,n);
+        }
     }
 
     private boolean isTreeBase(World world,World.Block b){
