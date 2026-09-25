@@ -9,7 +9,7 @@ import com.badlogic.gdx.math.Vector3;
 import com.outland.game.world.*;
 import java.util.*;
 
-/** Owns all GPU resources; simulation/world classes never reference these objects. */
+/** Wasteland renderer: voxel-compatible collision/storage with varied 3D silhouettes. */
 public final class WorldRenderer {
     private final Model[] models=new Model[BlockType.values().length];
     private final Map<Long,ModelInstance> instances=new HashMap<>();
@@ -20,51 +20,61 @@ public final class WorldRenderer {
     private long cachedRevision=-1;
     private boolean created;
 
-    public void create() {
-        if(created) return;
+    public void create(){
+        if(created)return;
         ModelBuilder builder=new ModelBuilder();
-        int[] colors={0x68a94fff,0x8a603fff,0x858b91ff,0x79502fff,0x438443ff};
-        try {
-            for(int i=0;i<models.length;i++) models[i]=builder.createBox(1,1,1,
-                new Material(ColorAttribute.createDiffuse(new Color(colors[i]))),
-                VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal);
-            batch=new ModelBatch(); environment=new Environment();
-            // Softer outdoor lighting so the first scene is readable rather than washed out.
+        int[] colors={0x68a94fff,0x8a603fff,0x858b91ff,0x79502fff,0x438443ff,0x4f9f54ff,0x77a96aff};
+        try{
+            long attrs=VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal;
+            models[BlockType.GRASS.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[0]))),attrs);
+            models[BlockType.DIRT.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[1]))),attrs);
+            models[BlockType.STONE.id()]=builder.createBox(1,1,1,new Material(ColorAttribute.createDiffuse(new Color(colors[2]))),attrs);
+            // Trunks are cylindrical rather than square posts.
+            models[BlockType.WOOD.id()]=builder.createCylinder(.34f,1f,.34f,8,new Material(ColorAttribute.createDiffuse(new Color(colors[3]))),attrs);
+            // Foliage is made from low-poly blobs rather than cubic leaf blocks.
+            models[BlockType.LEAVES.id()]=builder.createSphere(1.05f,1.05f,1.05f,8,5,new Material(ColorAttribute.createDiffuse(new Color(colors[4]))),attrs);
+            models[BlockType.CACTUS.id()]=builder.createCylinder(.38f,1f,.38f,10,new Material(ColorAttribute.createDiffuse(new Color(colors[5]))),attrs);
+            // Uranium is an irregular low-poly mineral silhouette, not a cube.
+            models[BlockType.URANIUM.id()]=builder.createSphere(1.05f,.85f,.92f,7,4,new Material(ColorAttribute.createDiffuse(new Color(colors[6]))),attrs);
+            batch=new ModelBatch();environment=new Environment();
             environment.set(new ColorAttribute(ColorAttribute.AmbientLight,.38f,.40f,.43f,1f));
             environment.add(new DirectionalLight().set(.55f,.52f,.46f,-1f,-2f,-.5f));
             created=true;
-        } catch(Throwable failure) { dispose(); throw new IllegalStateException("Renderer initialization failed",failure); }
+        }catch(Throwable failure){dispose();throw new IllegalStateException("Renderer initialization failed",failure);}
     }
-    public void render(World world, Camera camera, Vector3 playerPosition) {
-        if(!created) throw new IllegalStateException("WorldRenderer not created");
+
+    public void render(World world,Camera camera,Vector3 playerPosition){
+        if(!created)throw new IllegalStateException("WorldRenderer not created");
         sync(world);
         batch.begin(camera);
-        try {
-            for(World.Block block:cachedBlocks) {
+        try{
+            for(World.Block block:cachedBlocks){
                 ModelInstance instance=instances.get(World.key(block.x,block.y,block.z));
-                if(instance!=null && instance.transform.getTranslation(scratch).dst2(playerPosition)<24f*24f)
+                if(instance!=null&&instance.transform.getTranslation(scratch).dst2(playerPosition)<68f*68f)
                     batch.render(instance,environment);
             }
-        } finally { batch.end(); }
+        }finally{batch.end();}
     }
-    private void sync(World world) {
-        if(cachedRevision==world.revision()) return;
+
+    private void sync(World world){
+        if(cachedRevision==world.revision())return;
         cachedBlocks=new ArrayList<>(world.snapshot());
         instances.clear();
-        for(World.Block b:cachedBlocks) {
+        for(World.Block b:cachedBlocks){
             ModelInstance instance=new ModelInstance(models[b.type.id()]);
-            instance.transform.setToTranslation(b.x,b.y,b.z);
+            // Slight scale variation prevents every prop from looking stamped out.
+            if(b.type==BlockType.CACTUS||b.type==BlockType.URANIUM||b.type==BlockType.LEAVES){
+                float s=.88f+((int)(Math.abs(World.key(b.x,b.y,b.z))%17))/100f;
+                instance.transform.setToTranslation(b.x,b.y,b.z).scale(s,s,s);
+            }else instance.transform.setToTranslation(b.x,b.y,b.z);
             instances.put(World.key(b.x,b.y,b.z),instance);
         }
         cachedRevision=world.revision();
     }
-    public void dispose() {
-        ModelBatch oldBatch=batch; batch=null;
-        if(oldBatch!=null)try{oldBatch.dispose();}catch(Throwable ignored){}
-        for(int i=0;i<models.length;i++) {
-            Model model=models[i];models[i]=null;
-            if(model!=null)try{model.dispose();}catch(Throwable ignored){}
-        }
+
+    public void dispose(){
+        ModelBatch oldBatch=batch;batch=null;if(oldBatch!=null)try{oldBatch.dispose();}catch(Throwable ignored){}
+        for(int i=0;i<models.length;i++){Model model=models[i];models[i]=null;if(model!=null)try{model.dispose();}catch(Throwable ignored){}}
         instances.clear();cachedBlocks=Collections.emptyList();environment=null;created=false;cachedRevision=-1;
     }
 }
