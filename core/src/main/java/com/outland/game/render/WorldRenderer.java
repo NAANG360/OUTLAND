@@ -198,15 +198,17 @@ public final class WorldRenderer {
             for(World.Block b:own.values()){
                 boolean base=b.type==BlockType.GRASS||b.type==BlockType.DIRT||b.type==BlockType.STONE;
                 // Base terrain is drawn by the low-poly surface mesh below. Keep
-                // voxel terrain in storage/collision, but do not expose cube faces.
-                if(base)continue;
-                if(b.type==BlockType.WOOD||b.type==BlockType.LEAVES||b.type==BlockType.CACTUS)continue;
-                if(b.type==BlockType.GRASS && world.getBlock(b.x,b.y+1,b.z)==null){
-                    int roll=Math.floorMod(b.x*92821+b.z*68917,1000);
-                    if(roll<18)addRock(pending,b);
-                    else if(roll<42)addGroundBush(pending,b);
-                    else if(roll<112)addGrassTuft(pending,b);
+                // voxel terrain in storage/collision, but dress exposed grass.
+                if(base){
+                    if(b.type==BlockType.GRASS && world.getBlock(b.x,b.y+1,b.z)==null){
+                        int roll=Math.floorMod(b.x*92821+b.z*68917,1000);
+                        if(roll<18)addRock(pending,b);
+                        else if(roll<42)addGroundBush(pending,b);
+                        else if(roll<112)addGrassTuft(pending,b);
+                    }
+                    continue;
                 }
+                if(b.type==BlockType.WOOD||b.type==BlockType.LEAVES||b.type==BlockType.CACTUS)continue;
             }
         }
 
@@ -237,6 +239,7 @@ public final class WorldRenderer {
     private Model buildTerrainSurface(World world,int cx,int cz){
         ModelBuilder builder=new ModelBuilder();
         long attrs=VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal;
+        builder.begin();
         Material grassMat=new Material(ColorAttribute.createDiffuse(new Color(0x6f7f4fff)));
         Material dirtMat=new Material(ColorAttribute.createDiffuse(new Color(0x875a3cff)));
         MeshPartBuilder top=builder.part("ground",GL20.GL_TRIANGLES,attrs,grassMat);
@@ -344,7 +347,7 @@ public final class WorldRenderer {
         float oz=((float)((hash>>>12)&255)/255f-.5f)*.55f;
         Model model=(seed>.62f)?rock:rockDark;
         ModelInstance i=new ModelInstance(model);
-        i.transform.setToTranslation(b.x+ox,b.y+.5f+.20f*scale,b.z+oz).scale(scale,scale*.58f,scale);
+        i.transform.setToTranslation(b.x+ox,b.y+.5f+.29f*scale,b.z+oz).scale(scale,scale*.58f,scale);
         i.transform.rotate(Vector3.Y,seed*137f);
         add(pending,i,b.x,b.z);
     }
