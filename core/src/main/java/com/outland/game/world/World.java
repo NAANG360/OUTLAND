@@ -72,7 +72,7 @@ public final class World {
     public boolean replaceBlock(int x,int y,int z,BlockType type) {
         long k=key(x,y,z); Block old=blocks.get(k); if(old==null) return false;
         blocks.put(k,new Block(x,y,z,type));
-        refreshTerrainColumn(x,y,z,old,type);
+        refreshTerrainColumn(x,y,z,old.type,type);
         revision++; markChanged(k); return true;
     }
     public Block removeBlock(int x,int y,int z) {
