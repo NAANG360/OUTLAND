@@ -96,21 +96,36 @@ public final class OutlandGame extends ApplicationAdapter {
                 return true;
             }
             @Override public boolean touchDown(int x,int y,int pointer,int button){
-                float nx=x/(float)Math.max(1,Gdx.graphics.getWidth()), ny=y/(float)Math.max(1,Gdx.graphics.getHeight());
-                if(ny>.78f&&nx>.48f){
-                    if(nx>.84f)input.jump=true;
-                    else if(nx>.72f)input.nextBlock=true;
-                    else if(nx>.60f)input.place=true;
-                    else input.mine=true;
+                float w=Math.max(1,Gdx.graphics.getWidth()), h=Math.max(1,Gdx.graphics.getHeight());
+                float nx=x/w, ny=y/h;
+
+                // Four visible action buttons: M mine, P place, + next, J jump.
+                if(nx>.72f && ny>.72f){
+                    if(nx>.86f) input.place=true; else input.mine=true;
                     return true;
                 }
-                if(nx>.42f){lookPointer=pointer;lastLookX=x;lastLookY=y;}
-                else {movePointer=pointer;moveOriginX=x;moveOriginY=y;input.forward=ny>.55f?1:-1;input.strafe=nx<.19f?-1:(nx>.29f?1:0);}
+                if(nx>.72f && ny>.55f){
+                    if(nx>.86f) input.jump=true; else input.nextBlock=true;
+                    return true;
+                }
+
+                // Left thumbstick zone. Capture its starting point for analog movement.
+                if(nx<.34f && ny>.62f){
+                    movePointer=pointer;moveOriginX=x;moveOriginY=y;
+                    input.forward=0;input.strafe=0;
+                    return true;
+                }
+
+                // Remaining right-side surface controls camera look.
+                if(nx>.38f){lookPointer=pointer;lastLookX=x;lastLookY=y;}
                 return true;
             }
             @Override public boolean touchDragged(int x,int y,int pointer){
                 if(pointer==lookPointer){input.lookX+=x-lastLookX;input.lookY+=y-lastLookY;lastLookX=x;lastLookY=y;}
-                if(pointer==movePointer){input.forward=MathUtils.clamp((moveOriginY-y)/100f,-1,1);input.strafe=MathUtils.clamp((x-moveOriginX)/100f,-1,1);}
+                if(pointer==movePointer){
+                    input.forward=MathUtils.clamp((moveOriginY-y)/100f,-1,1);
+                    input.strafe=MathUtils.clamp((x-moveOriginX)/100f,-1,1);
+                }
                 return true;
             }
             @Override public boolean touchUp(int x,int y,int pointer,int button){
