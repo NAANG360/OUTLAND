@@ -14,9 +14,9 @@ public final class PlayerController {
         player.yaw+=input.lookX*.004f;
         player.pitch=MathUtils.clamp(player.pitch-input.lookY*.004f,-1.25f,1.25f);
         player.forward(forward);
-        // Y x forward is the player's true right vector. The old forward x Y
-        // vector mirrored strafing, making A/D feel swapped.
-        right.set(Vector3.Y).crs(forward).nor();
+        // forward x up gives the world-right vector. This matches the mobile
+        // joystick: dragging right must move the player to screen-right.
+        right.set(forward).crs(Vector3.Y).nor();
         player.position.mulAdd(forward,input.forward*4.2f*dt).mulAdd(right,input.strafe*4.2f*dt);
         if(input.jump && player.grounded){player.verticalVelocity=6.5f;player.grounded=false;}
         player.verticalVelocity-=17f*dt;
