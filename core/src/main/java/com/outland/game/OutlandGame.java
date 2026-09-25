@@ -100,15 +100,16 @@ public final class OutlandGame extends ApplicationAdapter {
                 // downward-positive. Convert once here so hitboxes and visuals share a space.
                 float width=Math.max(1,Gdx.graphics.getWidth()),height=Math.max(1,Gdx.graphics.getHeight());
                 float nx=x/width,ny=1f-y/height;
-                if(ny>.78f&&nx>.48f){
-                    if(nx>.84f)input.jump=true;
-                    else if(nx>.72f)input.nextBlock=true;
-                    else if(nx>.60f)input.place=true;
-                    else input.mine=true;
+                // Action buttons occupy a 2x2 grid in the lower-right HUD.
+                if(ny<.22f&&nx>.72f){
+                    boolean rightColumn=nx>.85f;
+                    boolean topRow=ny>.11f;
+                    if(topRow){if(rightColumn)input.place=true;else input.mine=true;}
+                    else {if(rightColumn)input.jump=true;else input.nextBlock=true;}
                     return true;
                 }
                 if(nx>.42f){lookPointer=pointer;lastLookX=x;lastLookY=y;}
-                else {movePointer=pointer;moveOriginX=x;moveOriginY=height-y;input.forward=ny>.55f?1:-1;input.strafe=nx<.19f?-1:(nx>.29f?1:0);}
+                else {movePointer=pointer;moveOriginX=x;moveOriginY=height-y;input.forward=ny<.18f?-1:1;input.strafe=nx<.19f?-1:(nx>.29f?1:0);}
                 return true;
             }
             @Override public boolean touchDragged(int x,int y,int pointer){
@@ -161,7 +162,7 @@ public final class OutlandGame extends ApplicationAdapter {
                 "1 Grass "+player.inventory[BlockType.GRASS.id()]+"   2 Dirt "+player.inventory[BlockType.DIRT.id()]+"   3 Stone "+player.inventory[BlockType.STONE.id()],
                 "4 Wood "+player.inventory[BlockType.WOOD.id()]+"   5 Leaves "+player.inventory[BlockType.LEAVES.id()]+"   6 Cactus "+player.inventory[BlockType.CACTUS.id()]+"   7 Uranium "+player.inventory[BlockType.URANIUM.id()],
                 "Selected: "+BlockType.values()[player.selectedBlock],
-                status,"MOVE: left · LOOK: right drag","MINE       PLACE       NEXT       JUMP"};
+                status,"MOVE: left · LOOK: right drag"};
             hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),lines);
         }catch(Throwable failure){
             fatalMessage=failure.getClass().getSimpleName()+": "+String.valueOf(failure.getMessage());
