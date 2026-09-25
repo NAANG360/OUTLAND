@@ -251,7 +251,7 @@ public final class WorldRenderer {
         float oz=((float)((hash>>>12)&255)/255f-.5f)*.55f;
         Model model=(seed>.62f)?rock:rockDark;
         ModelInstance i=new ModelInstance(model);
-        i.transform.setToTranslation(b.x+ox,b.y+.34f*scale,b.z+oz).scale(scale,scale*.58f,scale);
+        i.transform.setToTranslation(b.x+ox,b.y+.5f+.20f*scale,b.z+oz).scale(scale,scale*.58f,scale);
         i.transform.rotate(Vector3.Y,seed*137f);
         add(pending,i,b.x,b.z);
     }
@@ -328,11 +328,7 @@ public final class WorldRenderer {
 
     private void addProp(Map<Long,Array<ModelInstance>> pending,Model model,float x,float y,float z,float scale,float rotX,float rotY,float rotZ){
         ModelInstance i=new ModelInstance(model);
-        if(type==BlockType.GRASS){
-            i.transform.setToTranslation(x,y+.30f,z).scale(scale*1.02f,scale,scale*1.02f);
-        } else {
-            i.transform.setToTranslation(x,y,z).scale(scale,scale,scale);
-        }
+        i.transform.setToTranslation(x,y,z).scale(scale,scale,scale);
         if(rotX!=0)i.transform.rotate(Vector3.X,rotX);
         if(rotY!=0)i.transform.rotate(Vector3.Y,rotY);
         if(rotZ!=0)i.transform.rotate(Vector3.Z,rotZ);
