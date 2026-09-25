@@ -11,7 +11,7 @@ public final class PlayerController {
     public void update(PlayerState player, InputState input, float delta, long seed) {
         float dt=MathUtils.clamp(delta,0f,0.033f);
         // Screen drag to the right turns the camera to the right.
-        player.yaw-=input.lookX*.004f;
+        player.yaw+=input.lookX*.004f;
         player.pitch=MathUtils.clamp(player.pitch-input.lookY*.004f,-1.25f,1.25f);
         player.forward(forward);
         // Y x forward is the player's true right vector. The old forward x Y
