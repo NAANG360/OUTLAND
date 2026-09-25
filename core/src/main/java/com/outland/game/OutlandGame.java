@@ -99,17 +99,21 @@ public final class OutlandGame extends ApplicationAdapter {
                 // HUD uses an upward-positive orthographic Y axis; Android touch input is
                 // downward-positive. Convert once here so hitboxes and visuals share a space.
                 float width=Math.max(1,Gdx.graphics.getWidth()),height=Math.max(1,Gdx.graphics.getHeight());
-                float nx=x/width,ny=1f-y/height;
-                // Action buttons occupy a 2x2 grid in the lower-right HUD.
-                if(ny<.22f&&nx>.72f){
-                    boolean rightColumn=nx>.85f;
-                    boolean topRow=ny>.11f;
-                    if(topRow){if(rightColumn)input.place=true;else input.mine=true;}
-                    else {if(rightColumn)input.jump=true;else input.nextBlock=true;}
-                    return true;
-                }
-                if(nx>.42f){lookPointer=pointer;lastLookX=x;lastLookY=y;}
-                else {movePointer=pointer;moveOriginX=x;moveOriginY=height-y;input.forward=ny<.18f?-1:1;input.strafe=nx<.19f?-1:(nx>.29f?1:0);}
+                float hudY=height-y;
+                float scale=Math.max(.72f,Math.min(width,height)/800f);
+                float bx=width-82f*scale,by=78f*scale,r=30f*scale,gap=72f*scale;
+                // Hit the same four circles HudRenderer draws; do not approximate them with
+                // normalized screen bands, which made both columns overlap on narrow phones.
+                float dx= x-(bx-gap),dy=hudY-(by+gap);
+                if(dx*dx+dy*dy<=r*r){input.nextBlock=true;return true;}
+                dx=x-bx;dy=hudY-(by+gap);
+                if(dx*dx+dy*dy<=r*r){input.jump=true;return true;}
+                dx=x-(bx-gap);dy=hudY-by;
+                if(dx*dx+dy*dy<=r*r){input.mine=true;return true;}
+                dx=x-bx;dy=hudY-by;
+                if(dx*dx+dy*dy<=r*r){input.place=true;return true;}
+                if(x>width*.42f){lookPointer=pointer;lastLookX=x;lastLookY=y;}
+                else {movePointer=pointer;moveOriginX=x;moveOriginY=hudY;input.forward=0;input.strafe=0;}
                 return true;
             }
             @Override public boolean touchDragged(int x,int y,int pointer){
