@@ -38,14 +38,24 @@ public final class TerrainGenerator {
     }
 
     private static void makeTree(World world,int x,int y,int z){
-        // Storage/collision stays block based, but the renderer turns this into
-        // a continuous low-poly tree silhouette rather than a pile of cubes.
-        for(int i=0;i<4;i++)world.setBlock(x,y+i,z,BlockType.WOOD);
-        world.setBlock(x+1,y+2,z,BlockType.LEAVES);
-        world.setBlock(x-1,y+3,z,BlockType.LEAVES);
-        world.setBlock(x,y+3,z+1,BlockType.LEAVES);
-        world.setBlock(x,y+4,z,BlockType.LEAVES);
-        world.setBlock(x+1,y+4,z-1,BlockType.LEAVES);
+        // Collision/storage stays voxel-based; the renderer builds the organic silhouette.
+        for(int i=0;i<5;i++)world.setBlock(x,y+i,z,BlockType.WOOD);
+
+        // A compact branching scaffold keeps foliage attached to the trunk.
+        world.setBlock(x+1,y+2,z,BlockType.WOOD);
+        world.setBlock(x+1,y+3,z,BlockType.WOOD);
+        world.setBlock(x-1,y+3,z,BlockType.WOOD);
+        world.setBlock(x,y+3,z+1,BlockType.WOOD);
+        world.setBlock(x,y+4,z+1,BlockType.WOOD);
+
+        // Leaf cells are intentionally clustered around branch ends rather than
+        // forming a Minecraft-style sphere.
+        world.setBlock(x+1,y+3,z+1,BlockType.LEAVES);
+        world.setBlock(x+2,y+3,z,BlockType.LEAVES);
+        world.setBlock(x-1,y+4,z,BlockType.LEAVES);
+        world.setBlock(x,y+4,z+1,BlockType.LEAVES);
+        world.setBlock(x+1,y+4,z+1,BlockType.LEAVES);
+        world.setBlock(x,y+5,z,BlockType.LEAVES);
     }
 
     private static void makeCactus(World world,int x,int y,int z){
