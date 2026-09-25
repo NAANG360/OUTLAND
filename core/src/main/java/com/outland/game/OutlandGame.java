@@ -176,20 +176,28 @@ public final class OutlandGame extends ApplicationAdapter {
 
     private void interact(boolean place){
         Vector3 direction=new Vector3(MathUtils.sin(player.yaw)*MathUtils.cos(player.pitch),MathUtils.sin(player.pitch),-MathUtils.cos(player.yaw)*MathUtils.cos(player.pitch)).nor();
-        for(float distance=.5f;distance<5.5f;distance+=.2f){
+        int lastX=Math.round(player.position.x),lastY=Math.round(player.position.y),lastZ=Math.round(player.position.z);
+        for(float distance=.5f;distance<5.5f;distance+=.12f){
             Vector3 point=new Vector3(player.position).mulAdd(direction,distance);
             int x=Math.round(point.x),y=Math.round(point.y),z=Math.round(point.z);
-            World.Block block=world.getBlock(x,y,z);if(block==null)continue;
+            World.Block block=world.getBlock(x,y,z);
+            if(block==null){lastX=x;lastY=y;lastZ=z;continue;}
             if(!place){
                 World.Block removed=world.removeBlock(x,y,z);
                 if(removed!=null){player.inventory[removed.type.id()]++;status="Mined "+removed.type;}
             }else{
                 int selected=player.selectedBlock;
                 if(player.inventory[selected]<=0){status="No "+BlockType.values()[selected];return;}
-                Vector3 target=new Vector3(point).mulAdd(direction,-.65f);
-                int bx=Math.round(target.x),by=Math.round(target.y),bz=Math.round(target.z);
-                if(Math.abs(bx-player.position.x)<1.2f&&Math.abs(bz-player.position.z)<1.2f)return;
-                if(world.setBlock(bx,by,bz,BlockType.values()[selected])){player.inventory[selected]--;status="Placed "+BlockType.values()[selected];}
+                // Place into the empty voxel immediately before the surface hit.
+                int bx=lastX,by=lastY,bz=lastZ;
+                if(Math.abs(bx-player.position.x)<1.0f&&Math.abs(by-player.position.y)<1.0f&&Math.abs(bz-player.position.z)<1.0f){
+                    status="Too close to place";return;
+                }
+                if(world.setBlock(bx,by,bz,BlockType.values()[selected])){
+                    player.inventory[selected]--;status="Placed "+BlockType.values()[selected];
+                } else {
+                    status="Can't place there";
+                }
             }
             return;
         }
