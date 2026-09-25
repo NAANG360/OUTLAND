@@ -11,7 +11,6 @@ import com.outland.game.save.WorldSave;
 import com.outland.game.ui.HudRenderer;
 import com.outland.game.world.*;
 import java.io.*;
-import java.util.Arrays;
 
 /** Composition root. Owns subsystem order; individual systems own their resources/state. */
 public final class OutlandGame extends ApplicationAdapter {
@@ -66,8 +65,8 @@ public final class OutlandGame extends ApplicationAdapter {
     private void copyPlayer(PlayerState source){
         player.position.set(source.position);player.yaw=source.yaw;player.pitch=source.pitch;
         player.verticalVelocity=source.verticalVelocity;player.grounded=source.grounded;
-        player.health=source.health;player.selectedBlock=source.selectedBlock;
-        System.arraycopy(source.inventory,0,player.inventory,0,player.inventory.length);
+        player.health=source.health;player.selectedBlock=MathUtils.clamp(source.selectedBlock,0,BlockType.values().length-1);
+        System.arraycopy(source.inventory,0,player.inventory,0,Math.min(source.inventory.length,player.inventory.length));
     }
 
     private void saveWorld(){
@@ -89,28 +88,42 @@ public final class OutlandGame extends ApplicationAdapter {
     private void installInput(){
         Gdx.input.setInputProcessor(new InputAdapter(){
             @Override public boolean keyDown(int key){
-                if(key>=Input.Keys.NUM_1&&key<=Input.Keys.NUM_5)player.selectedBlock=key-Input.Keys.NUM_1;
+                if(key>=Input.Keys.NUM_1&&key<=Input.Keys.NUM_7)
+                    player.selectedBlock=MathUtils.clamp(key-Input.Keys.NUM_1,0,BlockType.values().length-1);
                 if(key==Input.Keys.SPACE)input.jump=true;
                 if(key==Input.Keys.F)input.mine=true;
                 if(key==Input.Keys.G)input.place=true;
                 return true;
             }
             @Override public boolean touchDown(int x,int y,int pointer,int button){
-                float nx=x/(float)Math.max(1,Gdx.graphics.getWidth()), ny=y/(float)Math.max(1,Gdx.graphics.getHeight());
-                if(ny>.78f&&nx>.48f){
-                    if(nx>.84f)input.jump=true;
-                    else if(nx>.72f)input.nextBlock=true;
-                    else if(nx>.60f)input.place=true;
-                    else input.mine=true;
-                    return true;
-                }
-                if(nx>.42f){lookPointer=pointer;lastLookX=x;lastLookY=y;}
-                else {movePointer=pointer;moveOriginX=x;moveOriginY=y;input.forward=ny>.55f?1:-1;input.strafe=nx<.19f?-1:(nx>.29f?1:0);}
+                // HUD uses an upward-positive orthographic Y axis; Android touch input is
+                // downward-positive. Convert once here so hitboxes and visuals share a space.
+                float width=Math.max(1,Gdx.graphics.getWidth()),height=Math.max(1,Gdx.graphics.getHeight());
+                float hudY=height-y;
+                float scale=Math.max(.72f,Math.min(width,height)/800f);
+                float bx=width-82f*scale,by=78f*scale,r=30f*scale,gap=72f*scale;
+                // Hit the same four circles HudRenderer draws; do not approximate them with
+                // normalized screen bands, which made both columns overlap on narrow phones.
+                float dx= x-(bx-gap),dy=hudY-(by+gap);
+                if(dx*dx+dy*dy<=r*r){input.nextBlock=true;return true;}
+                dx=x-bx;dy=hudY-(by+gap);
+                if(dx*dx+dy*dy<=r*r){input.jump=true;return true;}
+                dx=x-(bx-gap);dy=hudY-by;
+                if(dx*dx+dy*dy<=r*r){input.mine=true;return true;}
+                dx=x-bx;dy=hudY-by;
+                if(dx*dx+dy*dy<=r*r){input.place=true;return true;}
+                if(x>width*.42f){lookPointer=pointer;lastLookX=x;lastLookY=y;}
+                else {movePointer=pointer;moveOriginX=x;moveOriginY=hudY;input.forward=0;input.strafe=0;}
                 return true;
             }
             @Override public boolean touchDragged(int x,int y,int pointer){
                 if(pointer==lookPointer){input.lookX+=x-lastLookX;input.lookY+=y-lastLookY;lastLookX=x;lastLookY=y;}
-                if(pointer==movePointer){input.forward=MathUtils.clamp((moveOriginY-y)/100f,-1,1);input.strafe=MathUtils.clamp((x-moveOriginX)/100f,-1,1);}
+                if(pointer==movePointer){
+                    float height=Math.max(1,Gdx.graphics.getHeight());
+                    float hudY=height-y;
+                    input.forward=MathUtils.clamp((hudY-moveOriginY)/100f,-1,1);
+                    input.strafe=MathUtils.clamp((x-moveOriginX)/100f,-1,1);
+                }
                 return true;
             }
             @Override public boolean touchUp(int x,int y,int pointer,int button){
@@ -147,10 +160,13 @@ public final class OutlandGame extends ApplicationAdapter {
             Gdx.gl.glViewport(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
             Gdx.gl.glClearColor(.48f,.72f,.88f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);
             worldRenderer.render(world,camera,player.position);
-            String[] lines={"OUTLAND · "+seed,"HP "+player.health+"   XYZ "+(int)player.position.x+" / "+(int)player.position.y+" / "+(int)player.position.z,
-                "[1]Grass "+player.inventory[0]+" [2]Dirt "+player.inventory[1]+" [3]Stone "+player.inventory[2],
-                "[4]Wood "+player.inventory[3]+" [5]Leaves "+player.inventory[4]+" Selected: "+BlockType.values()[player.selectedBlock],
-                status,"MOVE: left · LOOK: right drag","MINE       PLACE       NEXT       JUMP"};
+            String[] lines={
+                "OUTLAND · "+seed,
+                "HP "+player.health+"   XYZ "+(int)player.position.x+" / "+(int)player.position.y+" / "+(int)player.position.z,
+                "1 Grass "+player.inventory[BlockType.GRASS.id()]+"   2 Dirt "+player.inventory[BlockType.DIRT.id()]+"   3 Stone "+player.inventory[BlockType.STONE.id()],
+                "4 Wood "+player.inventory[BlockType.WOOD.id()]+"   5 Leaves "+player.inventory[BlockType.LEAVES.id()]+"   6 Cactus "+player.inventory[BlockType.CACTUS.id()]+"   7 Uranium "+player.inventory[BlockType.URANIUM.id()],
+                "Selected: "+BlockType.values()[player.selectedBlock],
+                status,"MOVE: left · LOOK: right drag"};
             hud.render(Gdx.graphics.getWidth(),Gdx.graphics.getHeight(),lines);
         }catch(Throwable failure){
             fatalMessage=failure.getClass().getSimpleName()+": "+String.valueOf(failure.getMessage());
@@ -160,18 +176,28 @@ public final class OutlandGame extends ApplicationAdapter {
 
     private void interact(boolean place){
         Vector3 direction=new Vector3(MathUtils.sin(player.yaw)*MathUtils.cos(player.pitch),MathUtils.sin(player.pitch),-MathUtils.cos(player.yaw)*MathUtils.cos(player.pitch)).nor();
-        for(float distance=.5f;distance<5.5f;distance+=.2f){
+        int lastX=Math.round(player.position.x),lastY=Math.round(player.position.y),lastZ=Math.round(player.position.z);
+        for(float distance=.5f;distance<5.5f;distance+=.12f){
             Vector3 point=new Vector3(player.position).mulAdd(direction,distance);
             int x=Math.round(point.x),y=Math.round(point.y),z=Math.round(point.z);
-            World.Block block=world.getBlock(x,y,z);if(block==null)continue;
-            if(!place){world.removeBlock(x,y,z);player.inventory[block.type.id()]++;status="Mined "+block.type;}
-            else{
+            World.Block block=world.getBlock(x,y,z);
+            if(block==null){lastX=x;lastY=y;lastZ=z;continue;}
+            if(!place){
+                World.Block removed=world.removeBlock(x,y,z);
+                if(removed!=null){player.inventory[removed.type.id()]++;status="Mined "+removed.type;}
+            }else{
                 int selected=player.selectedBlock;
                 if(player.inventory[selected]<=0){status="No "+BlockType.values()[selected];return;}
-                Vector3 target=new Vector3(point).mulAdd(direction,-.65f);
-                int bx=Math.round(target.x),by=Math.round(target.y),bz=Math.round(target.z);
-                if(Math.abs(bx-player.position.x)<1.2f&&Math.abs(bz-player.position.z)<1.2f)return;
-                if(world.setBlock(bx,by,bz,BlockType.values()[selected])){player.inventory[selected]--;status="Placed "+BlockType.values()[selected];}
+                // Place into the empty voxel immediately before the surface hit.
+                int bx=lastX,by=lastY,bz=lastZ;
+                if(Math.abs(bx-player.position.x)<1.0f&&Math.abs(by-player.position.y)<1.0f&&Math.abs(bz-player.position.z)<1.0f){
+                    status="Too close to place";return;
+                }
+                if(world.setBlock(bx,by,bz,BlockType.values()[selected])){
+                    player.inventory[selected]--;status="Placed "+BlockType.values()[selected];
+                } else {
+                    status="Can't place there";
+                }
             }
             return;
         }

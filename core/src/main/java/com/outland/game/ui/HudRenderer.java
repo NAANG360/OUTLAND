@@ -23,8 +23,8 @@ public final class HudRenderer {
 
         // Touch controls: thumbstick on the lower-left; action cluster on lower-right.
         float scale=Math.max(.72f,Math.min(width,height)/800f);
-        float cx=96f*scale, cy=height-96f*scale, base=58f*scale, knob=25f*scale;
-        float bx=width-82f*scale, by=height-78f*scale, r=30f*scale, gap=72f*scale;
+        float cx=96f*scale, cy=96f*scale, base=58f*scale, knob=25f*scale;
+        float bx=width-82f*scale, by=78f*scale, r=30f*scale, gap=72f*scale;
 
         shapes.setProjectionMatrix(new Matrix4().setToOrtho2D(0,0,width,height));
         shapes.begin(ShapeRenderer.ShapeType.Filled);
@@ -45,9 +45,10 @@ public final class HudRenderer {
         batch.begin();
         try {
             // Keep diagnostics readable but out of the control zones.
-            for(int i=0;i<Math.min(lines.length,5);i++) font.draw(batch,lines[i],14,height-16-i*22);
+            for(int i=0;i<Math.min(lines.length,7);i++) font.draw(batch,lines[i],14,height-16-i*22);
 
             font.draw(batch,"●",cx-8f*scale,cy+7f*scale);
+            // Top row: NEXT / JUMP. Bottom row: MINE / PLACE.
             font.draw(batch,"M",bx-gap-7f,by+7f);
             font.draw(batch,"P",bx-7f,by+7f);
             font.draw(batch,"+",bx-gap-7f,by+gap+7f);

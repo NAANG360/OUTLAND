@@ -11,12 +11,12 @@ public final class PlayerController {
     public void update(PlayerState player, InputState input, float delta, long seed) {
         float dt=MathUtils.clamp(delta,0f,0.033f);
         // Screen drag to the right turns the camera to the right.
-        player.yaw-=input.lookX*.004f;
+        player.yaw+=input.lookX*.004f;
         player.pitch=MathUtils.clamp(player.pitch-input.lookY*.004f,-1.25f,1.25f);
         player.forward(forward);
-        // Y x forward is the player's true right vector. The old forward x Y
-        // vector mirrored strafing, making A/D feel swapped.
-        right.set(Vector3.Y).crs(forward).nor();
+        // forward x up gives the world-right vector. This matches the mobile
+        // joystick: dragging right must move the player to screen-right.
+        right.set(forward).crs(Vector3.Y).nor();
         player.position.mulAdd(forward,input.forward*4.2f*dt).mulAdd(right,input.strafe*4.2f*dt);
         if(input.jump && player.grounded){player.verticalVelocity=6.5f;player.grounded=false;}
         player.verticalVelocity-=17f*dt;
