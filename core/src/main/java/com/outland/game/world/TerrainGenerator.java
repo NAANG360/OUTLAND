@@ -20,11 +20,11 @@ public final class TerrainGenerator {
             world.setBlock(x,h-2,z,BlockType.DIRT);
             world.setBlock(x,h-3,z,BlockType.STONE);
 
-            // Vegetation and salvageable oddities are sparse and deterministic.
+            // Give rare minerals their own branch before vegetation so they can actually spawn.
             float roll=random.nextFloat();
-            if(h>3&&roll>.994f) makeTree(world,x,h+1,z);
+            if(roll>.997f) world.replaceBlock(x,h-3,z,BlockType.URANIUM);
+            else if(h>3&&roll>.994f) makeTree(world,x,h+1,z);
             else if(h>3&&roll<.010f) makeCactus(world,x,h+1,z);
-            else if(roll>.997f) world.setBlock(x,h-3,z,BlockType.URANIUM);
         }
         return world;
     }
