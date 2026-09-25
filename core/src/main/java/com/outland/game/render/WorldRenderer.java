@@ -91,7 +91,7 @@ public final class WorldRenderer {
             // Underground layers are retained for collision/mining but are not submitted
             // until exposed. This keeps the initial scene focused on the actual surface.
             boolean base=b.type==BlockType.GRASS||b.type==BlockType.DIRT||b.type==BlockType.STONE;
-            if(base&&world.getBlock(b.x,b.y+1,b.z)!=null)continue;
+            if(base&&isFullyEnclosed(world,b))continue;
 
             int cx=Math.floorDiv(b.x,CHUNK_SIZE),cz=Math.floorDiv(b.z,CHUNK_SIZE);
             long chunkKey=chunkKey(cx,cz);
@@ -112,6 +112,15 @@ public final class WorldRenderer {
             chunks.put(entry.getKey(),chunk);
         }
         cachedRevision=world.revision();
+    }
+
+    private static boolean isFullyEnclosed(World world,World.Block b){
+        return world.getBlock(b.x,b.y+1,b.z)!=null
+                &&world.getBlock(b.x,b.y-1,b.z)!=null
+                &&world.getBlock(b.x+1,b.y,b.z)!=null
+                &&world.getBlock(b.x-1,b.y,b.z)!=null
+                &&world.getBlock(b.x,b.y,b.z+1)!=null
+                &&world.getBlock(b.x,b.y,b.z-1)!=null;
     }
 
     private static long chunkKey(int cx,int cz){return ((long)cx<<32)^(cz&0xffffffffL);}
