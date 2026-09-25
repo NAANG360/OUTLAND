@@ -33,7 +33,12 @@ public final class World {
 
     /** Highest terrain voxel, ignoring trees and other props above the ground. */
     public int highestTerrainY(int x,int z) {
-        for(int y=511;y>=-512;y--) {
+        return highestTerrainY(x,z,511);
+    }
+
+    public int highestTerrainY(int x,int z,int fromY) {
+        int start=Math.min(511,fromY);
+        for(int y=start;y>=-512;y--) {
             Block block=blocks.get(key(x,y,z));
             if(block!=null && isTerrain(block.type)) return y;
         }
