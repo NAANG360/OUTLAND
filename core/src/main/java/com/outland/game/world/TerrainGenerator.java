@@ -40,9 +40,15 @@ public final class TerrainGenerator {
     }
 
     private static void makeTree(World world,int x,int y,int z){
-        for(int i=0;i<3;i++)world.setBlock(x,y+i,z,BlockType.WOOD);
-        for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++)for(int dy=2;dy<=4;dy++)
-            if(Math.abs(dx)+Math.abs(dz)+(dy==4?1:0)<4)world.setBlock(x+dx,y+dy,z+dz,BlockType.LEAVES);
+        for(int i=0;i<4;i++)world.setBlock(x,y+i,z,BlockType.WOOD);
+        // Compact, asymmetric crown: fewer small foliage volumes instead of a blocky sphere.
+        for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++){
+            if(Math.abs(dx)+Math.abs(dz)<=1){
+                world.setBlock(x+dx,y+2,z+dz,BlockType.LEAVES);
+                world.setBlock(x+dx,y+3,z+dz,BlockType.LEAVES);
+            }
+        }
+        world.setBlock(x,y+4,z,BlockType.LEAVES);
     }
 
     private static void makeCactus(World world,int x,int y,int z){
