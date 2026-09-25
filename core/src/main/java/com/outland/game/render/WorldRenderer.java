@@ -209,6 +209,7 @@ public final class WorldRenderer {
                     continue;
                 }
                 if(b.type==BlockType.WOOD||b.type==BlockType.LEAVES||b.type==BlockType.CACTUS)continue;
+                if(b.type==BlockType.URANIUM)addInstance(pending,b.type,b.x,b.y,b.z,1f);
             }
         }
 
