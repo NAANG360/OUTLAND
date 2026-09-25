@@ -25,7 +25,7 @@ public final class WorldRenderer {
     private final Map<Long,Chunk> chunks=new HashMap<>();
     private final Map<Long,Map<Long,World.Block>> blocksByChunk=new HashMap<>();
     private final Vector3 scratch=new Vector3();
-    private Model treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip;
+    private Model treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip,rock,rockDark;
     private ModelBatch batch;
     private Environment environment;
     private long cachedRevision=-1;
@@ -79,6 +79,10 @@ public final class WorldRenderer {
             cactusBody=builder.createCylinder(.34f,3.5f,.34f,10,cactusMat,attrs);
             cactusArm=builder.createCylinder(.22f,1.05f,.22f,10,cactusMat,attrs);
             cactusTip=builder.createSphere(.36f,.28f,.36f,10,6,cactusMat,attrs);
+            Material rockMat=new Material(ColorAttribute.createDiffuse(new Color(0x5f625fff)));
+            Material rockDarkMat=new Material(ColorAttribute.createDiffuse(new Color(0x4d504eff)));
+            rock=builder.createSphere(1.0f,.68f,.82f,7,4,rockMat,attrs);
+            rockDark=builder.createSphere(.78f,.52f,.64f,7,4,rockDarkMat,attrs);
 
             // Keep terrain lighting restrained so the ground does not wash out.
             batch=new ModelBatch();environment=new Environment();
@@ -180,6 +184,10 @@ public final class WorldRenderer {
                 if(base&&isFullyEnclosed(world,b))continue;
                 if(b.type==BlockType.WOOD||b.type==BlockType.LEAVES||b.type==BlockType.CACTUS)continue;
                 addInstance(pending,b.type,b.x,b.y,b.z,1f);
+                if(b.type==BlockType.GRASS && world.getBlock(b.x,b.y+1,b.z)==null){
+                    int roll=Math.floorMod(b.x*92821+b.z*68917,1000);
+                    if(roll<24)addRock(pending,b);
+                }
             }
         }
 
@@ -209,6 +217,19 @@ public final class WorldRenderer {
     private boolean isCactusBase(World world,World.Block b){
         World.Block below=world.getBlock(b.x,b.y-1,b.z);
         return below==null||below.type!=BlockType.CACTUS;
+    }
+
+    private void addRock(Map<Long,Array<ModelInstance>> pending,World.Block b){
+        long hash=World.key(b.x,b.y,b.z)*0x9E3779B97F4A7C15L;
+        float seed=(float)((hash>>>16)&0xffff)/65535f;
+        float scale=.55f+seed*.55f;
+        float ox=((float)((hash>>>4)&255)/255f-.5f)*.55f;
+        float oz=((float)((hash>>>12)&255)/255f-.5f)*.55f;
+        Model model=(seed>.62f)?rock:rockDark;
+        ModelInstance i=new ModelInstance(model);
+        i.transform.setToTranslation(b.x+ox,b.y+.34f*scale,b.z+oz).scale(scale,scale*.58f,scale);
+        i.transform.rotate(Vector3.Y,seed*137f);
+        add(pending,i,b.x,b.z);
     }
 
     private void addTree(Map<Long,Array<ModelInstance>> pending,World.Block b){
@@ -334,8 +355,8 @@ public final class WorldRenderer {
         for(int i=0;i<models.length;i++){Model model=models[i];models[i]=null;if(model!=null)try{model.dispose();}catch(Throwable ignored){}}
         for(int i=1;i<grassVariants.length;i++)if(grassVariants[i]!=null)try{grassVariants[i].dispose();}catch(Throwable ignored){}
         for(int i=1;i<dirtVariants.length;i++)if(dirtVariants[i]!=null)try{dirtVariants[i].dispose();}catch(Throwable ignored){}
-        Model[] props={treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip};
-        treeTrunk=treeTrunkTop=treeBranch=treeBranchThin=treeLeaf=treeLeafDark=cactusBody=cactusArm=cactusTip=null;
+        Model[] props={treeTrunk,treeTrunkTop,treeBranch,treeBranchThin,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip,rock,rockDark};
+        treeTrunk=treeTrunkTop=treeBranch=treeBranchThin=treeLeaf=treeLeafDark=cactusBody=cactusArm=cactusTip=rock=rockDark=null;
         for(Model model:props)if(model!=null)try{model.dispose();}catch(Throwable ignored){}
         environment=null;created=false;cachedRevision=-1;
     }
