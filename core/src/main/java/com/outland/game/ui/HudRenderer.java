@@ -48,6 +48,7 @@ public final class HudRenderer {
             for(int i=0;i<Math.min(lines.length,5);i++) font.draw(batch,lines[i],14,height-16-i*22);
 
             font.draw(batch,"●",cx-8f*scale,cy+7f*scale);
+            // Top row: NEXT / JUMP. Bottom row: MINE / PLACE.
             font.draw(batch,"M",bx-gap-7f,by+7f);
             font.draw(batch,"P",bx-7f,by+7f);
             font.draw(batch,"+",bx-gap-7f,by+gap+7f);
