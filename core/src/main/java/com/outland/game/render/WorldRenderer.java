@@ -18,7 +18,12 @@ import java.util.*;
  */
 public final class WorldRenderer {
     private static final int CHUNK_SIZE=8;
-    private static final float RENDER_RADIUS=42f;
+    private static final float RENDER_RADIUS=46f;
+    // Terrain spans roughly -6..12 world units including cliff faces and props.
+    // Keep the frustum sphere centered in the actual terrain band so chunks don't
+    // disappear when the camera looks downhill or from a low player position.
+    private static final float CHUNK_CULL_Y=3.5f;
+    private static final float CHUNK_CULL_RADIUS=14f;
 
     private final Model[] models=new Model[BlockType.values().length];
     private final Model[] grassVariants=new Model[3];
@@ -114,11 +119,10 @@ public final class WorldRenderer {
         batch.begin(camera);
         try{
             for(Chunk chunk:chunks.values()){
-                scratch.set(chunk.center.x,0,chunk.center.z);
+                scratch.set(chunk.center.x,CHUNK_CULL_Y,chunk.center.z);
                 float dx=scratch.x-playerPosition.x,dz=scratch.z-playerPosition.z;
                 if(dx*dx+dz*dz>RENDER_RADIUS*RENDER_RADIUS)continue;
-                scratch.y=playerPosition.y;
-                if(!camera.frustum.sphereInFrustum(scratch,CHUNK_SIZE*1.4f))continue;
+                if(!camera.frustum.sphereInFrustum(scratch,CHUNK_CULL_RADIUS))continue;
                 if(chunk.terrainInstance!=null)batch.render(chunk.terrainInstance,environment);
                 batch.render(chunk.cache,environment);
             }
@@ -219,8 +223,8 @@ public final class WorldRenderer {
             Map<Long,World.Block> nearby=blocksByChunk.get(chunkKey(cx+dx,cz+dz));
             if(nearby==null)continue;
             for(World.Block b:nearby.values()){
-                if(b.type==BlockType.WOOD&&isTreeBase(world,b))addTree(pending,b);
-                else if(b.type==BlockType.CACTUS&&isCactusBase(world,b))addCactus(pending,world,b);
+                if(b.type==BlockType.WOOD&&isTreeBase(world,b)&&world.highestTerrainY(b.x,b.z)>-512)addTree(pending,b);
+                else if(b.type==BlockType.CACTUS&&isCactusBase(world,b)&&world.highestTerrainY(b.x,b.z)>-512)addCactus(pending,world,b);
             }
         }
 
