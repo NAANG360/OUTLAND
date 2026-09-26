@@ -31,6 +31,7 @@ public final class WorldRenderer {
     private Environment environment;
     private long cachedRevision=-1;
     private boolean created;
+    private boolean firstFrame=true;
 
     private static final class Chunk {
         final int cx,cz;
@@ -101,8 +102,13 @@ public final class WorldRenderer {
 
     public void render(World world,Camera camera,Vector3 playerPosition){
         if(!created)throw new IllegalStateException("WorldRenderer not created");
-        sync(world);
-        buildOnePendingChunk(world, playerPosition);
+        if(firstFrame){
+            syncIndexOnly(world);
+            firstFrame=false;
+        } else {
+            sync(world);
+            buildOnePendingChunk(world,playerPosition);
+        }
         batch.begin(camera);
         try{
             int visible=0;
@@ -115,6 +121,13 @@ public final class WorldRenderer {
                 visible++;
             }
         }finally{batch.end();}
+    }
+
+    private void syncIndexOnly(World world){
+        if(cachedRevision==world.revision())return;
+        rebuildIndexOnly(world);
+        cachedRevision=world.revision();
+        world.consumeChangedBlockKey();
     }
 
     private void sync(World world){
@@ -416,4 +429,5 @@ public final class WorldRenderer {
         environment=null;
         created=false;
         cachedRevision=-1;
+        firstFrame=true;
     }}
