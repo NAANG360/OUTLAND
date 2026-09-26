@@ -213,8 +213,8 @@ public final class WorldRenderer {
         boolean any=false;
         int sx=cx*CHUNK_SIZE,sz=cz*CHUNK_SIZE;
 
-        for(int x=sx-1;x<=sx+CHUNK_SIZE-1;x++){
-            for(int z=sz-1;z<=sz+CHUNK_SIZE-1;z++){
+        for(int x=sx;x<sx+CHUNK_SIZE;x++){
+            for(int z=sz;z<sz+CHUNK_SIZE;z++){
                 float h00=surfaceHeight(world,x,z);
                 float h10=surfaceHeight(world,x+1,z);
                 float h11=surfaceHeight(world,x+1,z+1);
