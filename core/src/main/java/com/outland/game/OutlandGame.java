@@ -4,6 +4,8 @@ import com.badlogic.gdx.*;
 import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.math.*;
 import com.outland.game.diagnostics.RuntimeDiagnostics;
+import com.outland.game.engine.EngineConfig;
+import com.outland.game.engine.FrameClock;
 import com.outland.game.input.InputState;
 import com.outland.game.player.*;
 import com.outland.game.render.WorldRenderer;
@@ -20,6 +22,7 @@ public final class OutlandGame extends ApplicationAdapter {
     private final InputState input=new InputState();
     private final WorldRenderer worldRenderer=new WorldRenderer();
     private final HudRenderer hud=new HudRenderer();
+    private final FrameClock frameClock=new FrameClock();
     private World world;
     private PerspectiveCamera camera;
     private long seed;
@@ -35,8 +38,8 @@ public final class OutlandGame extends ApplicationAdapter {
             stage("hud.create"); hud.create();
             loadOrGenerateWorld();
             stage("camera.create");
-            camera=new PerspectiveCamera(70,Math.max(1,Gdx.graphics.getWidth()),Math.max(1,Gdx.graphics.getHeight()));
-            camera.near=.1f; camera.far=60f;
+            camera=new PerspectiveCamera(EngineConfig.CAMERA_FOV,Math.max(1,Gdx.graphics.getWidth()),Math.max(1,Gdx.graphics.getHeight()));
+            camera.near=EngineConfig.CAMERA_NEAR; camera.far=EngineConfig.CAMERA_FAR;
             stage("renderer.create"); worldRenderer.create();
             stage("input.install"); installInput();
             stage("bootstrap.complete blocks="+world.size());
@@ -160,15 +163,20 @@ public final class OutlandGame extends ApplicationAdapter {
             else if(movePointer<0)input.strafe=0;
             if(Gdx.input.isKeyJustPressed(Input.Keys.SPACE))input.jump=true;
             if(input.nextBlock){player.selectedBlock=(player.selectedBlock+1)%BlockType.values().length;input.nextBlock=false;}
-            playerController.update(player,input,dt,world);
-            if(input.mine)interact(false);
-            if(input.place)interact(true);
+            final boolean mine=input.mine, place=input.place;
+            frameClock.advance(dt,new FrameClock.Step(){
+                @Override public void tick(float step){
+                    playerController.update(player,input,step,world);
+                }
+            });
+            if(mine)interact(false);
+            if(place)interact(true);
             input.clearTransient();
             camera.position.set(player.position);
             camera.direction.set(MathUtils.sin(player.yaw)*MathUtils.cos(player.pitch),MathUtils.sin(player.pitch),-MathUtils.cos(player.yaw)*MathUtils.cos(player.pitch)).nor();
             camera.up.set(Vector3.Y);camera.viewportWidth=Math.max(1,Gdx.graphics.getWidth());camera.viewportHeight=Math.max(1,Gdx.graphics.getHeight());camera.update();
             Gdx.gl.glViewport(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
-            Gdx.gl.glClearColor(.60f,.70f,.73f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);
+            Gdx.gl.glClearColor(.47f,.61f,.66f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);
             worldRenderer.render(world,camera,player.position);
             String[] lines={
                 "OUTLAND · "+seed,
