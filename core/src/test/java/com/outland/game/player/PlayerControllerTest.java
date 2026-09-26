@@ -14,7 +14,7 @@ public class PlayerControllerTest {
         player.position.set(0,-10,0);
         new PlayerController().update(player,new InputState(),.2f,world);
         assertTrue(player.grounded);
-        assertEquals(world.highestSolidY(0,0)+2.2f,player.position.y,.0001f);
+        assertEquals(world.highestTerrainY(0,0)+2.2f,player.position.y,.0001f);
     }
 
     @Test public void minedBlockChangesCollisionFloor() {
