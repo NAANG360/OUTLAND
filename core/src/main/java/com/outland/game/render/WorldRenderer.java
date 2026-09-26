@@ -102,6 +102,7 @@ public final class WorldRenderer {
     public void render(World world,Camera camera,Vector3 playerPosition){
         if(!created)throw new IllegalStateException("WorldRenderer not created");
         sync(world);
+        buildOnePendingChunk(world, playerPosition);
         batch.begin(camera);
         try{
             int visible=0;
@@ -120,7 +121,7 @@ public final class WorldRenderer {
         if(cachedRevision==world.revision())return;
         Long changed=world.consumeChangedBlockKey();
         if(cachedRevision<0||changed==null){
-            rebuildAll(world);
+            rebuildIndexOnly(world);
             cachedRevision=world.revision();
             world.consumeChangedBlockKey();
             return;
@@ -132,7 +133,7 @@ public final class WorldRenderer {
         cachedRevision=world.revision();
     }
 
-    private void rebuildAll(World world){
+    private void rebuildIndexOnly(World world){
         for(Chunk c:chunks.values())c.dispose();
         chunks.clear();
         blocksByChunk.clear();
@@ -142,7 +143,34 @@ public final class WorldRenderer {
             if(map==null){map=new HashMap<>();blocksByChunk.put(k,map);}
             map.put(World.key(block.x,block.y,block.z),block);
         }
-        for(long k:blocksByChunk.keySet())rebuildChunk(world,(int)(k>>32),(int)k);
+    }
+
+    /**
+     * Incremental first-frame construction: build one nearest chunk per render
+     * instead of constructing every world mesh before the first visible frame.
+     * This prevents the Android surface from looking frozen/blank while the
+     * procedural low-poly terrain is being assembled.
+     */
+    private void buildOnePendingChunk(World world,Vector3 playerPosition){
+        if(blocksByChunk.isEmpty()||chunks.size()>=MAX_VISIBLE_CHUNKS)return;
+        long bestKey=0L;
+        float bestDistance=Float.MAX_VALUE;
+        boolean found=false;
+        int pcx=Math.floorDiv(MathUtils.floor(playerPosition.x),CHUNK_SIZE);
+        int pcz=Math.floorDiv(MathUtils.floor(playerPosition.z),CHUNK_SIZE);
+        for(Long key:blocksByChunk.keySet()){
+            if(chunks.containsKey(key))continue;
+            int cx=(int)(key>>32),cz=(int)(long)key;
+            float dx=(cx-pcx)*CHUNK_SIZE+CHUNK_SIZE*.5f;
+            float dz=(cz-pcz)*CHUNK_SIZE+CHUNK_SIZE*.5f;
+            float distance=dx*dx+dz*dz;
+            if(distance<=RENDER_RADIUS*RENDER_RADIUS&&distance<bestDistance){
+                bestDistance=distance;
+                bestKey=key;
+                found=true;
+            }
+        }
+        if(found)rebuildChunk(world,(int)(bestKey>>32),(int)bestKey);
     }
 
     private void updateIndex(World world,long key){
