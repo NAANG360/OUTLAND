@@ -31,6 +31,8 @@ public final class WorldRenderer {
     private Environment environment;
     private long cachedRevision=-1;
     private boolean created;
+    private boolean firstFrame=true;
+    private int buildBudget=1;
 
     private static final class Chunk {
         final int cx,cz;
@@ -101,7 +103,13 @@ public final class WorldRenderer {
 
     public void render(World world,Camera camera,Vector3 playerPosition){
         if(!created)throw new IllegalStateException("WorldRenderer not created");
-        sync(world);
+        if(firstFrame){
+            syncIndexOnly(world);
+            firstFrame=false;
+        } else {
+            sync(world);
+            buildVisibleChunks(world,playerPosition,buildBudget);
+        }
         batch.begin(camera);
         try{
             int visible=0;
@@ -116,11 +124,43 @@ public final class WorldRenderer {
         }finally{batch.end();}
     }
 
+    private void syncIndexOnly(World world){
+        if(cachedRevision==world.revision())return;
+        rebuildIndexOnly(world);
+        cachedRevision=world.revision();
+        world.consumeChangedBlockKey();
+    }
+
+    private void buildVisibleChunks(World world,Vector3 playerPosition,int budget){
+        if(budget<=0||blocksByChunk.isEmpty())return;
+        int built=0;
+        int pcx=Math.floorDiv((int)Math.floor(playerPosition.x),CHUNK_SIZE);
+        int pcz=Math.floorDiv((int)Math.floor(playerPosition.z),CHUNK_SIZE);
+        while(built<budget){
+            long bestKey=0L;
+            float bestDistance=Float.MAX_VALUE;
+            boolean found=false;
+            for(Long key:blocksByChunk.keySet()){
+                if(chunks.containsKey(key))continue;
+                int cx=(int)(key>>32),cz=(int)(long)key;
+                float dx=(cx-pcx)*CHUNK_SIZE+CHUNK_SIZE*.5f;
+                float dz=(cz-pcz)*CHUNK_SIZE+CHUNK_SIZE*.5f;
+                float distance=dx*dx+dz*dz;
+                if(distance<=RENDER_RADIUS*RENDER_RADIUS&&distance<bestDistance){
+                    bestDistance=distance;bestKey=key;found=true;
+                }
+            }
+            if(!found)break;
+            rebuildChunk(world,(int)(bestKey>>32),(int)bestKey);
+            built++;
+        }
+    }
+
     private void sync(World world){
         if(cachedRevision==world.revision())return;
         Long changed=world.consumeChangedBlockKey();
         if(cachedRevision<0||changed==null){
-            rebuildAll(world);
+            rebuildIndexOnly(world);
             cachedRevision=world.revision();
             world.consumeChangedBlockKey();
             return;
@@ -132,7 +172,7 @@ public final class WorldRenderer {
         cachedRevision=world.revision();
     }
 
-    private void rebuildAll(World world){
+    private void rebuildIndexOnly(World world){
         for(Chunk c:chunks.values())c.dispose();
         chunks.clear();
         blocksByChunk.clear();
@@ -388,4 +428,5 @@ public final class WorldRenderer {
         environment=null;
         created=false;
         cachedRevision=-1;
+        firstFrame=true;
     }}
