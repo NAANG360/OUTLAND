@@ -5,7 +5,6 @@ import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
-import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 import com.outland.game.world.*;
@@ -20,11 +19,11 @@ public final class WorldRenderer {
     private static final int CHUNK_SIZE=8;
     private static final float RENDER_RADIUS=64f;
     private static final int MAX_VISIBLE_CHUNKS=225;
-    private static final float VOID_FLOOR=-2f;
-
+    private final Model[] models=new Model[BlockType.values().length];
+    private final Model[] grassVariants=new Model[3];
+    private final Model[] dirtVariants=new Model[2];
     private final Map<Long,Chunk> chunks=new HashMap<>();
     private final Map<Long,Map<Long,World.Block>> blocksByChunk=new HashMap<>();
-    private final Vector3 nScratch=new Vector3();
     private Model treeTrunk,treeTrunkTop,treeBranch,treeLeaf,treeLeafDark;
     private Model cactusBody,cactusArm,cactusTip,rock,rockDark,grassTuft,bush,uranium;
     private ModelBatch batch;
@@ -36,21 +35,12 @@ public final class WorldRenderer {
         final int cx,cz;
         final ModelCache cache=new ModelCache();
         final Vector3 center;
-        Model terrainModel;
-        ModelInstance terrainInstance;
         Chunk(int cx,int cz){
             this.cx=cx;this.cz=cz;
-            center=new Vector3(cx*CHUNK_SIZE+4f,0,cz*CHUNK_SIZE+4f);
+            center=new Vector3(cx*CHUNK_SIZE+CHUNK_SIZE*.5f,0,cz*CHUNK_SIZE+CHUNK_SIZE*.5f);
         }
-        void build(Array<ModelInstance> props,Model terrain){
-            terrainModel=terrain;
-            terrainInstance=terrain==null?null:new ModelInstance(terrain);
-            cache.begin();cache.add(props);cache.end();
-        }
-        void dispose(){
-            cache.dispose();
-            if(terrainModel!=null){terrainModel.dispose();terrainModel=null;terrainInstance=null;}
-        }
+        void build(Array<ModelInstance> instances){cache.begin();cache.add(instances);cache.end();}
+        void dispose(){cache.dispose();}
     }
 
     public void create(){
@@ -58,6 +48,14 @@ public final class WorldRenderer {
         ModelBuilder b=new ModelBuilder();
         try{
             long attrs=VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal;
+            models[BlockType.GRASS.id()]=b.createBox(1.08f,.46f,1.08f,new Material(ColorAttribute.createDiffuse(new Color(0x5f8f4fff))),attrs);
+            grassVariants[0]=models[BlockType.GRASS.id()];
+            grassVariants[1]=b.createBox(1.08f,.40f,1.08f,new Material(ColorAttribute.createDiffuse(new Color(0x668f50ff))),attrs);
+            grassVariants[2]=b.createBox(1.08f,.34f,1.08f,new Material(ColorAttribute.createDiffuse(new Color(0x587f47ff))),attrs);
+            models[BlockType.DIRT.id()]=b.createBox(1f,1f,1f,new Material(ColorAttribute.createDiffuse(new Color(0x765238ff))),attrs);
+            dirtVariants[0]=models[BlockType.DIRT.id()];
+            dirtVariants[1]=b.createBox(1f,1f,1f,new Material(ColorAttribute.createDiffuse(new Color(0x69482fff))),attrs);
+            models[BlockType.STONE.id()]=b.createBox(1f,1f,1f,new Material(ColorAttribute.createDiffuse(new Color(0x777b7aff))),attrs);
             Material trunk=new Material(ColorAttribute.createDiffuse(new Color(0x66442fff)));
             Material trunkDark=new Material(ColorAttribute.createDiffuse(new Color(0x503624ff)));
             Material leaf=new Material(ColorAttribute.createDiffuse(new Color(0x32653aff)));
@@ -101,7 +99,6 @@ public final class WorldRenderer {
                 if(visible>=MAX_VISIBLE_CHUNKS)break;
                 float dx=c.center.x-playerPosition.x,dz=c.center.z-playerPosition.z;
                 if(dx*dx+dz*dz>RENDER_RADIUS*RENDER_RADIUS)continue;
-                if(c.terrainInstance!=null)batch.render(c.terrainInstance,environment);
                 batch.render(c.cache,environment);
                 visible++;
             }
@@ -161,6 +158,8 @@ public final class WorldRenderer {
         Map<Long,Array<ModelInstance>> pending=new HashMap<>();
         Map<Long,World.Block> own=blocksByChunk.get(key);
         if(own!=null)for(World.Block b:own.values()){
+            boolean terrain=b.type==BlockType.GRASS||b.type==BlockType.DIRT||b.type==BlockType.STONE;
+            if(terrain&&!isFullyEnclosed(world,b))addInstance(pending,b.type,b.x,b.y,b.z);
             if(b.type==BlockType.URANIUM)addProp(pending,uranium,b.x,b.y+.55f,b.z,1f,0,0,0);
             if(b.type==BlockType.GRASS&&world.getBlock(b.x,b.y+1,b.z)==null){
                 int roll=Math.floorMod(b.x*92821+b.z*68917,1000);
@@ -179,72 +178,11 @@ public final class WorldRenderer {
             }
         }
 
-        Array<ModelInstance> props=pending.get(key);
-        if(props==null)props=new Array<>();
-        Model terrain=buildTerrain(world,cx,cz);
-        if(props.size==0&&terrain==null)return;
+        Array<ModelInstance> instances=pending.get(key);
+        if(instances==null||instances.size==0)return;
         Chunk c=new Chunk(cx,cz);
-        c.build(props,terrain);
+        c.build(instances);
         chunks.put(key,c);
-    }
-
-    private Model buildTerrain(World world,int cx,int cz){
-        ModelBuilder b=new ModelBuilder();
-        long attrs=VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal|VertexAttributes.Usage.ColorPacked;
-        b.begin();
-        Material mat=new Material(ColorAttribute.createDiffuse(Color.WHITE));
-        MeshPartBuilder mesh=b.part("terrain",GL20.GL_TRIANGLES,attrs,mat);
-        boolean any=false;
-        int sx=cx*CHUNK_SIZE,sz=cz*CHUNK_SIZE;
-
-        for(int x=sx;x<sx+CHUNK_SIZE;x++)for(int z=sz;z<sz+CHUNK_SIZE;z++){
-            int h=world.highestTerrainY(x,z);
-            if(h<-512)continue;
-            any=true;
-
-            Vector3 a=new Vector3(x-.5f,cornerHeight(world,x-.5f,z-.5f),z-.5f);
-            Vector3 bb=new Vector3(x+.5f,cornerHeight(world,x+.5f,z-.5f),z-.5f);
-            Vector3 c=new Vector3(x+.5f,cornerHeight(world,x+.5f,z+.5f),z+.5f);
-            Vector3 d=new Vector3(x-.5f,cornerHeight(world,x-.5f,z+.5f),z+.5f);
-
-            nScratch.set(bb).sub(a).crs(new Vector3(c).sub(a)).nor();
-            if(nScratch.y<0)nScratch.scl(-1f);
-
-            World.Block top=world.getBlock(x,h,z);
-            if(top==null||top.type==BlockType.GRASS)mesh.setColor(new Color(0x667d4fff));
-            else if(top.type==BlockType.STONE)mesh.setColor(new Color(0x777b7aff));
-            else mesh.setColor(new Color(0x765238ff));
-            mesh.rect(a,bb,c,d,nScratch);
-
-            addEdge(mesh,world,x,z,x-1,z,d,a);
-            addEdge(mesh,world,x,z,x+1,z,bb,c);
-            addEdge(mesh,world,x,z,x,z-1,a,bb);
-            addEdge(mesh,world,x,z,x,z+1,c,d);
-        }
-        return any?b.end():null;
-    }
-
-    private void addEdge(MeshPartBuilder mesh,World world,int x,int z,int nx,int nz,Vector3 p0,Vector3 p1){
-        int h=world.highestTerrainY(x,z),nh=world.highestTerrainY(nx,nz);
-        if(nh>=h)return;
-        float bottom=nh<-512?VOID_FLOOR:Math.min(Math.min(p0.y,p1.y),nh+.5f);
-        Vector3 q0=new Vector3(p0.x,bottom,p0.z);
-        Vector3 q1=new Vector3(p1.x,bottom,p1.z);
-        Vector3 normal=new Vector3(p1).sub(p0).crs(new Vector3(q0).sub(p0)).nor();
-        if(normal.len2()<.01f)normal.set(0,1,0);
-        mesh.setColor(new Color(0x68452fff));
-        mesh.rect(p0,p1,q1,q0,normal);
-    }
-
-    private float cornerHeight(World world,float vx,float vz){
-        int x=(int)Math.floor(vx+.5f),z=(int)Math.floor(vz+.5f);
-        float sum=0;
-        int count=0;
-        for(int dx=-1;dx<=0;dx++)for(int dz=-1;dz<=0;dz++){
-            int h=world.highestTerrainY(x+dx,z+dz);
-            if(h>=-512){sum+=h+.5f;count++;}
-        }
-        return count==0?VOID_FLOOR:sum/count;
     }
 
     private boolean isTreeBase(World world,World.Block b){
@@ -323,16 +261,40 @@ public final class WorldRenderer {
         return ((long)x<<32)^(z&0xffffffffL);
     }
 
+    private void addInstance(Map<Long,Array<ModelInstance>> pending,BlockType type,int x,int y,int z){
+        Model model=models[type.id()];
+        if(type==BlockType.GRASS)model=grassVariants[Math.floorMod(x*31+z*17,grassVariants.length)];
+        else if(type==BlockType.DIRT)model=dirtVariants[Math.floorMod(x*13+z*29,dirtVariants.length)];
+        ModelInstance i=new ModelInstance(model);
+        i.transform.setToTranslation(x,y,z);
+        add(pending,i,x,z);
+    }
+
+    private static boolean isFullyEnclosed(World world,World.Block b){
+        return isOpaqueTerrainCell(world.getBlock(b.x,b.y+1,b.z))
+                &&isOpaqueTerrainCell(world.getBlock(b.x,b.y-1,b.z))
+                &&isOpaqueTerrainCell(world.getBlock(b.x+1,b.y,b.z))
+                &&isOpaqueTerrainCell(world.getBlock(b.x-1,b.y,b.z))
+                &&isOpaqueTerrainCell(world.getBlock(b.x,b.y,b.z+1))
+                &&isOpaqueTerrainCell(world.getBlock(b.x,b.y,b.z-1));
+    }
+
+    private static boolean isOpaqueTerrainCell(World.Block block){
+        return block!=null&&(block.type==BlockType.GRASS||block.type==BlockType.DIRT||block.type==BlockType.STONE);
+    }
+
     public void dispose(){
         if(batch!=null){batch.dispose();batch=null;}
         for(Chunk c:chunks.values())c.dispose();
         chunks.clear();
         blocksByChunk.clear();
+        for(int i=0;i<models.length;i++){Model m=models[i];models[i]=null;if(m!=null)m.dispose();}
+        for(int i=1;i<grassVariants.length;i++)if(grassVariants[i]!=null){grassVariants[i].dispose();grassVariants[i]=null;}
+        for(int i=1;i<dirtVariants.length;i++)if(dirtVariants[i]!=null){dirtVariants[i].dispose();dirtVariants[i]=null;}
         Model[] all={treeTrunk,treeTrunkTop,treeBranch,treeLeaf,treeLeafDark,cactusBody,cactusArm,cactusTip,rock,rockDark,grassTuft,bush,uranium};
         treeTrunk=treeTrunkTop=treeBranch=treeLeaf=treeLeafDark=cactusBody=cactusArm=cactusTip=rock=rockDark=grassTuft=bush=uranium=null;
         for(Model m:all)if(m!=null)m.dispose();
         environment=null;
         created=false;
         cachedRevision=-1;
-    }
-}
+    }}
