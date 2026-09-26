@@ -30,6 +30,7 @@ public final class OutlandGame extends ApplicationAdapter {
     private String fatalMessage;
     private int movePointer=-1, lookPointer=-1;
     private float moveOriginX,moveOriginY,lastLookX,lastLookY;
+    private int startupFrames = 0;
 
     @Override public void create() {
         Gdx.app.setLogLevel(Application.LOG_DEBUG);
@@ -152,6 +153,16 @@ public final class OutlandGame extends ApplicationAdapter {
 
     @Override public void render(){
         if(Gdx.gl==null)return;
+        if(startupFrames < 2){
+            if(startupFrames == 0) Gdx.app.log(TAG, "stage=render.first_frame.enter");
+            Gdx.gl.glViewport(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
+            Gdx.gl.glClearColor(.10f,.16f,.20f,1f);
+            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+            Gdx.gl.glFlush();
+            startupFrames++;
+            if(startupFrames == 2) Gdx.app.log(TAG, "stage=render.first_frame.complete");
+            return;
+        }
         float dt=Math.min(Gdx.graphics.getDeltaTime(),.033f);
         try{
             if(fatalMessage!=null){drawSafeMode();return;}
