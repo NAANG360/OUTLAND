@@ -22,7 +22,17 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - name: Run core unit tests
-        run: gradle --no-daemon :core:test
+        run: gradle --no-daemon :core:test --stacktrace --console=plain
+      - name: Collect test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OUTLAND-test-diagnostics-${{ github.run_id }}
+          path: |
+            core/build/test-results/test/**/*.xml
+            core/build/reports/tests/test/**
+          if-no-files-found: ignore
+
       - name: Build debug APK
         run: gradle --no-daemon :android:assembleDebug
       - name: Verify libGDX native payload
