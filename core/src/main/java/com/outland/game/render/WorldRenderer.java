@@ -9,6 +9,7 @@ import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 import com.outland.game.world.*;
+import com.outland.game.engine.EngineConfig;
 import java.util.*;
 
 /**
@@ -17,8 +18,8 @@ import java.util.*;
  * submit one ModelInstance per block every frame.
  */
 public final class WorldRenderer {
-    private static final int CHUNK_SIZE=8;
-    private static final float RENDER_RADIUS=72f;
+    private static final int CHUNK_SIZE=EngineConfig.CHUNK_SIZE;
+    private static final float RENDER_RADIUS=EngineConfig.RENDER_DISTANCE;
 
     private final Model[] models=new Model[BlockType.values().length];
     private final Model[] grassVariants=new Model[3];
@@ -115,12 +116,15 @@ public final class WorldRenderer {
         sync(world);
         batch.begin(camera);
         try{
+            int visible=0;
             for(Chunk chunk:chunks.values()){
+                if(visible>=EngineConfig.MAX_VISIBLE_CHUNKS)break;
                 scratch.set(chunk.center.x,playerPosition.y,chunk.center.z);
                 float dx=scratch.x-playerPosition.x,dz=scratch.z-playerPosition.z;
                 if(dx*dx+dz*dz>RENDER_RADIUS*RENDER_RADIUS)continue;
                 if(chunk.terrainInstance!=null)batch.render(chunk.terrainInstance,environment);
                 batch.render(chunk.cache,environment);
+                visible++;
             }
         }finally{batch.end();}
     }
