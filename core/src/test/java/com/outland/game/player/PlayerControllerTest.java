@@ -28,7 +28,7 @@ public class PlayerControllerTest {
         new PlayerController().update(player,new InputState(),.033f,world);
         assertTrue("Player should begin falling through the mined space",player.position.y<3.2f);
         for(int i=0;i<40;i++) new PlayerController().update(player,new InputState(),.033f,world);
-        assertEquals(world.highestSolidY(0,0)+2.2f,player.position.y,.0001f);
+        assertEquals(world.highestTerrainY(0,0)+2.2f,player.position.y,.0001f);
     }
 
     @Test public void jumpFollowsContinuousArc() {
