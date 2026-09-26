@@ -15,8 +15,6 @@ public class AndroidLauncher extends AndroidApplication {
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         CrashJournal.record("AndroidLauncher.onCreate", null);
-        // Ask before libGDX boot so repeated early startup failures don't prevent the prompt.
-        requestLogStoragePermission();
         AndroidApplicationConfiguration config = new AndroidApplicationConfiguration();
         config.useAccelerometer = false;
         config.useCompass = false;
@@ -24,7 +22,7 @@ public class AndroidLauncher extends AndroidApplication {
         config.numSamples = 0;
         config.depth = 16;
         config.disableAudio = true;
-        config.useImmersiveMode = true;
+        config.useImmersiveMode = false;
         try {
             initialize(new OutlandGame(), config);
         } catch (Throwable error) {
