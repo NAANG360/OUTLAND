@@ -2,7 +2,7 @@ name: Build OUTLAND APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main, 'feat/wasteland-vertical-slice', 'feat/wasteland-merge-ready', 'feat/wasteland-organic-world', 'fix/wasteland-codex-review' ]
+    branches: [ main, 'feat/wasteland-vertical-slice', 'feat/wasteland-merge-ready', 'feat/wasteland-organic-world', 'fix/wasteland-codex-review', 'feat/wasteland-art-pass-2' ]
 permissions:
   contents: read
 jobs:
@@ -22,7 +22,26 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - name: Run core unit tests
-        run: gradle --no-daemon :core:test
+        id: core_tests
+        continue-on-error: true
+        run: |
+          set +e
+          gradle --no-daemon :core:test --stacktrace --console=plain 2>&1 | tee core-test.log
+          status=${PIPESTATUS[0]}
+          mkdir -p core/build/ci
+          cp core-test.log core/build/ci/core-test.log
+          echo "${status}" > core/build/ci/core-test-exit.txt
+          exit "${status}"
+      - name: Collect test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OUTLAND-test-diagnostics-${{ github.run_id }}
+          path: core/build/ci/
+          if-no-files-found: error
+      - name: Fail if core tests failed
+        if: steps.core_tests.outcome == 'failure'
+        run: exit 1
       - name: Build debug APK
         run: gradle --no-daemon :android:assembleDebug
       - name: Verify libGDX native payload
