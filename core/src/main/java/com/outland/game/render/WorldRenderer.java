@@ -80,15 +80,17 @@ public final class WorldRenderer {
 
             // One-piece-ish stylized tree parts. Multiple organic lobes beat the
             // old isolated green balls while staying cheap enough for Android.
-            treeTrunk=builder.createCylinder(.38f,3.2f,.38f,9,trunkMat,attrs);
-            treeTrunkTop=builder.createCylinder(.27f,2.0f,.27f,9,trunkDarkMat,attrs);
-            treeBranch=builder.createCylinder(.13f,1.05f,.13f,8,barkMat,attrs);
-            treeBranchThin=builder.createCylinder(.09f,.78f,.09f,7,barkMat,attrs);
-            treeLeaf=builder.createSphere(1.35f,.82f,1.05f,8,6,leafMat,attrs);
-            treeLeafDark=builder.createSphere(1.05f,.66f,.86f,8,6,leafDarkMat,attrs);
-            cactusBody=builder.createCylinder(.34f,3.5f,.34f,10,cactusMat,attrs);
-            cactusArm=builder.createCylinder(.22f,1.05f,.22f,10,cactusMat,attrs);
-            cactusTip=builder.createSphere(.36f,.28f,.36f,10,6,cactusMat,attrs);
+            // Chunky, tapered low-poly trunks. The canopy is deliberately made
+            // from irregular faceted masses instead of the old round "ball" blobs.
+            treeTrunk=builder.createCylinder(.46f,3.0f,.40f,7,trunkMat,attrs);
+            treeTrunkTop=builder.createCylinder(.31f,1.8f,.27f,7,trunkDarkMat,attrs);
+            treeBranch=builder.createCylinder(.16f,1.15f,.13f,6,barkMat,attrs);
+            treeBranchThin=builder.createCylinder(.10f,.82f,.08f,6,barkMat,attrs);
+            treeLeaf=builder.createSphere(1.25f,.72f,1.05f,7,4,leafMat,attrs);
+            treeLeafDark=builder.createSphere(1.00f,.58f,.82f,7,4,leafDarkMat,attrs);
+            cactusBody=builder.createCylinder(.36f,3.5f,.33f,8,cactusMat,attrs);
+            cactusArm=builder.createCylinder(.25f,1.15f,.22f,8,cactusMat,attrs);
+            cactusTip=builder.createSphere(.36f,.34f,.36f,8,4,cactusMat,attrs);
             Material rockMat=new Material(ColorAttribute.createDiffuse(new Color(0x5f625fff)));
             Material rockDarkMat=new Material(ColorAttribute.createDiffuse(new Color(0x4d504eff)));
             rock=builder.createSphere(1.0f,.68f,.82f,7,4,rockMat,attrs);
@@ -343,25 +345,24 @@ public final class WorldRenderer {
 
     private void addTree(Map<Long,Array<ModelInstance>> pending,World.Block b){
         float seed=Math.abs(World.key(b.x,b.y,b.z)%10000)/10000f;
-        float lean=(seed-.5f)*8f;
-        float sway=(seed*.7f-.35f)*10f;
+        float lean=(seed-.5f)*7f;
 
-        addProp(pending,treeTrunk,b.x,b.y+1.35f,b.z,1f,lean,0f,0f);
-        addProp(pending,treeTrunkTop,b.x+.03f,b.y+3.15f,b.z-.02f,.92f,lean*.65f,0f,0f);
+        // A broad lower trunk that splits visibly before the canopy.
+        addProp(pending,treeTrunk,b.x,b.y+1.25f,b.z,1f,lean,seed*35f,0f);
+        addProp(pending,treeTrunkTop,b.x+.04f,b.y+2.65f,b.z-.03f,.92f,lean*.45f,seed*20f,0f);
 
-        // Branches leave the trunk gradually and terminate inside the canopy.
-        addBranch(pending,b.x,b.y+2.25f,b.z,b.x+.72f,b.y+2.72f,b.z+.10f,lean);
-        addBranch(pending,b.x,b.y+2.85f,b.z,b.x-.62f,b.y+3.28f,b.z+.08f,sway);
-        addBranch(pending,b.x+.03f,b.y+3.25f,b.z,b.x+.12f,b.y+3.72f,b.z+.58f,sway);
-        addThinBranch(pending,b.x+.02f,b.y+3.55f,b.z,b.x+.62f,b.y+3.9f,b.z-.35f);
+        addBranch(pending,b.x,b.y+2.15f,b.z,b.x+.72f,b.y+2.75f,b.z+.08f,lean);
+        addBranch(pending,b.x,b.y+2.55f,b.z,b.x-.66f,b.y+3.08f,b.z+.12f,-lean);
+        addBranch(pending,b.x+.02f,b.y+3.0f,b.z,b.x+.10f,b.y+3.55f,b.z+.55f,lean);
 
-        // Layered, offset foliage gives a natural crown instead of a lollipop.
-        addLeaf(pending,b.x-.10f,b.y+3.25f,b.z+.05f,1.00f,false);
-        addLeaf(pending,b.x+.62f,b.y+3.05f,b.z+.08f,.76f,true);
-        addLeaf(pending,b.x-.60f,b.y+3.48f,b.z+.10f,.72f,true);
-        addLeaf(pending,b.x+.12f,b.y+3.78f,b.z+.48f,.70f,false);
-        addLeaf(pending,b.x+.20f,b.y+4.02f,b.z-.35f,.58f,true);
-        addLeaf(pending,b.x-.05f,b.y+4.18f,b.z+.02f,.54f,false);
+        // Three-to-five offset canopy masses. Low-poly facets catch the light,
+        // while overlaps make the silhouette read as one connected crown.
+        addLeaf(pending,b.x-.48f,b.y+3.18f,b.z+.02f,.82f,false);
+        addLeaf(pending,b.x+.42f,b.y+3.05f,b.z+.08f,.88f,true);
+        addLeaf(pending,b.x+.05f,b.y+3.52f,b.z+.34f,.92f,false);
+        addLeaf(pending,b.x-.18f,b.y+3.82f,b.z-.12f,.68f,true);
+        if(seed>.32f)addLeaf(pending,b.x+.54f,b.y+3.66f,b.z-.28f,.62f,false);
+        if(seed<.68f)addLeaf(pending,b.x-.62f,b.y+3.62f,b.z+.22f,.58f,true);
     }
 
     private void addBranch(Map<Long,Array<ModelInstance>> pending,float x1,float y1,float z1,float x2,float y2,float z2,float lean){
@@ -393,21 +394,27 @@ public final class WorldRenderer {
 
     private void addCactus(Map<Long,Array<ModelInstance>> pending,World world,World.Block b){
         int height=1;
-        while(world.getBlock(b.x,b.y+height,b.z)!=null && world.getBlock(b.x,b.y+height,b.z).type==BlockType.CACTUS)height++;
+        while(world.getBlock(b.x,b.y+height,b.z)!=null &&
+              world.getBlock(b.x,b.y+height,b.z).type==BlockType.CACTUS)height++;
+
+        // Main stalk: shorter and wider than the old needle-like column.
+        float bodyScale=height/3.5f;
         addProp(pending,cactusBody,b.x,b.y+(height-1)*.5f,b.z,1f,0f,0f,0f);
-        // Scale the 3.5-unit source to the actual stored height.
         Array<ModelInstance> list=getList(pending,b.x,b.z);
         ModelInstance body=list.peek();
-        body.transform.scale(1f,height/3.5f,1f);
+        body.transform.scale(1f,bodyScale,1f);
 
-        addProp(pending,cactusTip,b.x,b.y+height-.02f,b.z,1f,0f,0f,0f);
+        addProp(pending,cactusTip,b.x,b.y+height-.02f,b.z,.92f,0f,0f,0f);
+
+        // Arms are attached into the stalk, with short vertical elbows so the
+        // cactus reads as one continuous low-poly mesh rather than loose pieces.
         if(height>=3){
-            addProp(pending,cactusArm,b.x+.48f,b.y+1.05f,b.z,1f,0f,0f,90f);
-            addProp(pending,cactusTip,b.x+1.0f,b.y+1.05f,b.z,.72f,0f,0f,0f);
+            addProp(pending,cactusArm,b.x+.36f,b.y+1.15f,b.z,1f,0f,0f,90f);
+            addProp(pending,cactusTip,b.x+.78f,b.y+1.15f,b.z,.72f,0f,0f,0f);
         }
         if(height>=4){
-            addProp(pending,cactusArm,b.x-.48f,b.y+1.95f,b.z,1f,0f,0f,-90f);
-            addProp(pending,cactusTip,b.x-1.0f,b.y+1.95f,b.z,.72f,0f,0f,0f);
+            addProp(pending,cactusArm,b.x-.36f,b.y+1.9f,b.z,1f,0f,0f,-90f);
+            addProp(pending,cactusTip,b.x-.78f,b.y+1.9f,b.z,.72f,0f,0f,0f);
         }
     }
 
