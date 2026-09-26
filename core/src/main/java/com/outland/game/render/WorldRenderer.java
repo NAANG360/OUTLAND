@@ -18,12 +18,7 @@ import java.util.*;
  */
 public final class WorldRenderer {
     private static final int CHUNK_SIZE=8;
-    private static final float RENDER_RADIUS=46f;
-    // Terrain spans roughly -6..12 world units including cliff faces and props.
-    // Keep the frustum sphere centered in the actual terrain band so chunks don't
-    // disappear when the camera looks downhill or from a low player position.
-    private static final float CHUNK_CULL_Y=3.5f;
-    private static final float CHUNK_CULL_RADIUS=14f;
+    private static final float RENDER_RADIUS=72f;
 
     private final Model[] models=new Model[BlockType.values().length];
     private final Model[] grassVariants=new Model[3];
@@ -119,10 +114,9 @@ public final class WorldRenderer {
         batch.begin(camera);
         try{
             for(Chunk chunk:chunks.values()){
-                scratch.set(chunk.center.x,CHUNK_CULL_Y,chunk.center.z);
+                scratch.set(chunk.center.x,playerPosition.y,chunk.center.z);
                 float dx=scratch.x-playerPosition.x,dz=scratch.z-playerPosition.z;
                 if(dx*dx+dz*dz>RENDER_RADIUS*RENDER_RADIUS)continue;
-                if(!camera.frustum.sphereInFrustum(scratch,CHUNK_CULL_RADIUS))continue;
                 if(chunk.terrainInstance!=null)batch.render(chunk.terrainInstance,environment);
                 batch.render(chunk.cache,environment);
             }
@@ -245,76 +239,66 @@ public final class WorldRenderer {
         ModelBuilder builder=new ModelBuilder();
         long attrs=VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal;
         builder.begin();
-        Material grassMat=new Material(ColorAttribute.createDiffuse(new Color(0x6f7f4fff)));
-        Material dirtMat=new Material(ColorAttribute.createDiffuse(new Color(0x875a3cff)));
-        MeshPartBuilder top=builder.part("ground",GL20.GL_TRIANGLES,attrs,grassMat);
-        boolean any=false;
-        Vector3 a=new Vector3(),b=new Vector3(),c=new Vector3(),d=new Vector3(),normal=new Vector3();
 
-        // First part: continuous sloped top surface.
+        Material topMat=new Material(ColorAttribute.createDiffuse(new Color(0x71824fff)));
+        Material cliffMat=new Material(ColorAttribute.createDiffuse(new Color(0x754b31ff)));
+        MeshPartBuilder top=builder.part("terrainTop",GL20.GL_TRIANGLES,attrs,topMat);
+        MeshPartBuilder cliffs=builder.part("terrainCliffs",GL20.GL_TRIANGLES,attrs,cliffMat);
+
+        boolean any=false;
         for(int x=cx*CHUNK_SIZE;x<cx*CHUNK_SIZE+CHUNK_SIZE;x++){
             for(int z=cz*CHUNK_SIZE;z<cz*CHUNK_SIZE+CHUNK_SIZE;z++){
                 int h=world.highestTerrainY(x,z);
                 if(h<-512)continue;
                 any=true;
-                a.set(x-.5f,cornerHeight(world,x,z),z-.5f);
-                b.set(x+.5f,cornerHeight(world,x+1,z),z-.5f);
-                c.set(x+.5f,cornerHeight(world,x+1,z+1),z+.5f);
-                d.set(x-.5f,cornerHeight(world,x,z+1),z+.5f);
-                normal.set(d).sub(a).crs(new Vector3(b).sub(a)).nor();
-                if(normal.y<0)normal.scl(-1f);
-                top.rect(a,b,c,d,normal);
+
+                // A deliberately conservative surface: every terrain column owns
+                // one flat low-poly tile. There is no interpolation across missing
+                // columns, so mining can never create stretched/floating polygons.
+                float y=h+.5f;
+                Vector3 a=new Vector3(x-.5f,y,z-.5f);
+                Vector3 b=new Vector3(x+.5f,y,z-.5f);
+                Vector3 c=new Vector3(x+.5f,y,z+.5f);
+                Vector3 d=new Vector3(x-.5f,y,z+.5f);
+                top.rect(a,b,c,d,0,1,0);
+
+                // Build only the vertical face between this column and a LOWER
+                // neighboring terrain column. The lower column's actual top is the
+                // bottom edge, so cliffs can never hang arbitrarily below the world.
+                int south=world.highestTerrainY(x,z-1);
+                if(south<h) addCliff(cliffs,
+                        x-.5f,y,z-.5f, x+.5f,y,z-.5f,
+                        x+.5f,south< -512 ? y : south+.5f,z-.5f,
+                        x-.5f,south< -512 ? y : south+.5f,z-.5f,0,0,-1);
+
+                int east=world.highestTerrainY(x+1,z);
+                if(east<h) addCliff(cliffs,
+                        x+.5f,y,z-.5f, x+.5f,y,z+.5f,
+                        x+.5f,east< -512 ? y : east+.5f,z+.5f,
+                        x+.5f,east< -512 ? y : east+.5f,z-.5f,1,0,0);
+
+                int north=world.highestTerrainY(x,z+1);
+                if(north<h) addCliff(cliffs,
+                        x+.5f,y,z+.5f, x-.5f,y,z+.5f,
+                        x-.5f,north< -512 ? y : north+.5f,z+.5f,
+                        x+.5f,north< -512 ? y : north+.5f,z+.5f,0,0,1);
+
+                int west=world.highestTerrainY(x-1,z);
+                if(west<h) addCliff(cliffs,
+                        x-.5f,y,z+.5f, x-.5f,y,z-.5f,
+                        x-.5f,west< -512 ? y : west+.5f,z-.5f,
+                        x-.5f,west< -512 ? y : west+.5f,z+.5f,-1,0,0);
             }
         }
-        if(!any)return null;
-
-        // Second part: exposed vertical cuts. They remain faceted and earthy,
-        // giving hills and mesas an authored low-poly silhouette.
-        MeshPartBuilder side=builder.part("terrainSides",GL20.GL_TRIANGLES,attrs,dirtMat);
-        for(int x=cx*CHUNK_SIZE;x<cx*CHUNK_SIZE+CHUNK_SIZE;x++){
-            for(int z=cz*CHUNK_SIZE;z<cz*CHUNK_SIZE+CHUNK_SIZE;z++){
-                int h=world.highestTerrainY(x,z);
-                if(h<-512)continue;
-                float south=cornerHeight(world,x,z);
-                float east=cornerHeight(world,x+1,z);
-                float north=cornerHeight(world,x+1,z+1);
-                float west=cornerHeight(world,x,z+1);
-                float bottom=h-3.5f;
-
-                if(world.highestTerrainY(x,z-1)<h){
-                    side.rect(x-.5f,south,z-.5f, x+.5f,east,z-.5f,
-                              x+.5f,bottom,z-.5f, x-.5f,bottom,z-.5f,
-                              0,0,-1);
-                }
-                if(world.highestTerrainY(x+1,z)<h){
-                    side.rect(x+.5f,east,z-.5f, x+.5f,north,z+.5f,
-                              x+.5f,bottom,z+.5f, x+.5f,bottom,z-.5f,
-                              1,0,0);
-                }
-                if(world.highestTerrainY(x,z+1)<h){
-                    side.rect(x+.5f,north,z+.5f, x-.5f,west,z+.5f,
-                              x-.5f,bottom,z+.5f, x+.5f,bottom,z+.5f,
-                              0,0,1);
-                }
-                if(world.highestTerrainY(x-1,z)<h){
-                    side.rect(x-.5f,west,z+.5f, x-.5f,south,z-.5f,
-                              x-.5f,bottom,z-.5f, x-.5f,bottom,z+.5f,
-                              -1,0,0);
-                }
-            }
-        }
-        return builder.end();
+        return any?builder.end():null;
     }
 
-    private float cornerHeight(World world,int x,int z){
-        float total=0f;int count=0;
-        int[] xs={x-1,x,x-1,x};
-        int[] zs={z-1,z-1,z,z};
-        for(int i=0;i<4;i++){
-            int h=world.highestTerrainY(xs[i],zs[i]);
-            if(h>=-512){total+=h+.5f;count++;}
-        }
-        return count==0?0f:total/count;
+    private void addCliff(MeshPartBuilder mesh,
+                          float ax,float ay,float az,float bx,float by,float bz,
+                          float cx,float cy,float cz,float dx,float dy,float dz,
+                          float nx,float ny,float nz){
+        if(Math.abs(ay-cy)<0.01f)return;
+        mesh.rect(ax,ay,az,bx,by,bz,cx,cy,cz,dx,dy,dz,nx,ny,nz);
     }
 
     private boolean isTreeBase(World world,World.Block b){
