@@ -176,7 +176,7 @@ public final class OutlandGame extends ApplicationAdapter {
             camera.direction.set(MathUtils.sin(player.yaw)*MathUtils.cos(player.pitch),MathUtils.sin(player.pitch),-MathUtils.cos(player.yaw)*MathUtils.cos(player.pitch)).nor();
             camera.up.set(Vector3.Y);camera.viewportWidth=Math.max(1,Gdx.graphics.getWidth());camera.viewportHeight=Math.max(1,Gdx.graphics.getHeight());camera.update();
             Gdx.gl.glViewport(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
-            Gdx.gl.glClearColor(.47f,.61f,.66f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);
+            Gdx.gl.glClearColor(.47f,.61f,.66f,1);Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);Gdx.gl.glDisable(GL20.GL_CULL_FACE);
             worldRenderer.render(world,camera,player.position);
             String[] lines={
                 "OUTLAND · "+seed,
