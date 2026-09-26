@@ -266,7 +266,7 @@ public final class WorldRenderer {
                 Vector3 b=new Vector3(x+.5f,y,z-.5f);
                 Vector3 c=new Vector3(x+.5f,y,z+.5f);
                 Vector3 d=new Vector3(x-.5f,y,z+.5f);
-                top.rect(a,b,c,d,0,1,0);
+                top.rect(a,b,c,d,Vector3.Y);
 
                 // Build only the vertical face between this column and a LOWER
                 // neighboring terrain column. The lower column's actual top is the
