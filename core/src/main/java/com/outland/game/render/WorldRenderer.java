@@ -5,6 +5,7 @@ import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 import com.outland.game.world.*;
@@ -35,12 +36,21 @@ public final class WorldRenderer {
         final int cx,cz;
         final ModelCache cache=new ModelCache();
         final Vector3 center;
+        Model terrainModel;
+        ModelInstance terrainInstance;
         Chunk(int cx,int cz){
             this.cx=cx;this.cz=cz;
             center=new Vector3(cx*CHUNK_SIZE+CHUNK_SIZE*.5f,0,cz*CHUNK_SIZE+CHUNK_SIZE*.5f);
         }
-        void build(Array<ModelInstance> instances){cache.begin();cache.add(instances);cache.end();}
-        void dispose(){cache.dispose();}
+        void build(Array<ModelInstance> instances,Model terrain){
+            terrainModel=terrain;
+            terrainInstance=terrain==null?null:new ModelInstance(terrain);
+            cache.begin();cache.add(instances);cache.end();
+        }
+        void dispose(){
+            cache.dispose();
+            if(terrainModel!=null){terrainModel.dispose();terrainModel=null;terrainInstance=null;}
+        }
     }
 
     public void create(){
@@ -99,6 +109,7 @@ public final class WorldRenderer {
                 if(visible>=MAX_VISIBLE_CHUNKS)break;
                 float dx=c.center.x-playerPosition.x,dz=c.center.z-playerPosition.z;
                 if(dx*dx+dz*dz>RENDER_RADIUS*RENDER_RADIUS)continue;
+                if(c.terrainInstance!=null)batch.render(c.terrainInstance,environment);
                 batch.render(c.cache,environment);
                 visible++;
             }
@@ -179,10 +190,90 @@ public final class WorldRenderer {
         }
 
         Array<ModelInstance> instances=pending.get(key);
-        if(instances==null||instances.size==0)return;
+        if(instances==null)instances=new Array<>();
+        Model terrain=buildLowPolyTerrain(world,cx,cz);
+        if(instances.size==0&&terrain==null)return;
         Chunk c=new Chunk(cx,cz);
-        c.build(instances);
+        c.build(instances,terrain);
         chunks.put(key,c);
+    }
+
+    /**
+     * Continuous low-poly terrain surface. The world remains voxel-backed for
+     * collision/mining, but the player sees a shared triangulated surface.
+     * Every surface vertex has a real fallback height, so missing columns can
+     * never turn into sky-colored holes.
+     */
+    private Model buildLowPolyTerrain(World world,int cx,int cz){
+        ModelBuilder b=new ModelBuilder();
+        long attrs=VertexAttributes.Usage.Position|VertexAttributes.Usage.Normal|VertexAttributes.Usage.ColorPacked;
+        b.begin();
+        Material mat=new Material(ColorAttribute.createDiffuse(Color.WHITE));
+        MeshPartBuilder mesh=b.part("terrain",GL20.GL_TRIANGLES,attrs,mat);
+        boolean any=false;
+        int sx=cx*CHUNK_SIZE,sz=cz*CHUNK_SIZE;
+
+        for(int x=sx-1;x<=sx+CHUNK_SIZE-1;x++){
+            for(int z=sz-1;z<=sz+CHUNK_SIZE-1;z++){
+                float h00=surfaceHeight(world,x,z);
+                float h10=surfaceHeight(world,x+1,z);
+                float h11=surfaceHeight(world,x+1,z+1);
+                float h01=surfaceHeight(world,x,z+1);
+                if(h00<-511f&&h10<-511f&&h11<-511f&&h01<-511f)continue;
+                any=true;
+
+                Vector3 a=new Vector3(x-.5f,h00,z-.5f);
+                Vector3 bb=new Vector3(x+.5f,h10,z-.5f);
+                Vector3 c=new Vector3(x+.5f,h11,z+.5f);
+                Vector3 d=new Vector3(x-.5f,h01,z+.5f);
+                Vector3 normal=new Vector3(bb).sub(a).crs(new Vector3(c).sub(a)).nor();
+                if(normal.y<0)normal.scl(-1f);
+
+                int shade=Math.floorMod(x*92821+z*68917,3);
+                if(shade==0)mesh.setColor(new Color(0x667f50ff));
+                else if(shade==1)mesh.setColor(new Color(0x5f774aff));
+                else mesh.setColor(new Color(0x6c8554ff));
+                mesh.rect(a,bb,c,d,normal);
+
+                addLowPolyCliff(mesh,world,x,z,x-1,z,a,d);
+                addLowPolyCliff(mesh,world,x,z,x+1,z,bb,c);
+                addLowPolyCliff(mesh,world,x,z,x,z-1,a,bb);
+                addLowPolyCliff(mesh,world,x,z,x,z+1,c,d);
+            }
+        }
+        return any?b.end():null;
+    }
+
+    private float surfaceHeight(World world,int x,int z){
+        float sum=0f;
+        int count=0;
+        for(int dx=-1;dx<=0;dx++)for(int dz=-1;dz<=0;dz++){
+            int h=world.highestTerrainY(x+dx,z+dz);
+            if(h>=-512){sum+=h+.5f;count++;}
+        }
+        if(count>0)return sum/count;
+        // A deleted/empty column inherits the nearest terrain sample instead
+        // of becoming a void. This is visual fallback only; collision is unchanged.
+        for(int radius=1;radius<=3;radius++){
+            for(int dx=-radius;dx<=radius;dx++)for(int dz=-radius;dz<=radius;dz++){
+                int h=world.highestTerrainY(x+dx,z+dz);
+                if(h>=-512)return h+.5f;
+            }
+        }
+        return -512f;
+    }
+
+    private void addLowPolyCliff(MeshPartBuilder mesh,World world,int x,int z,int nx,int nz,Vector3 p0,Vector3 p1){
+        int h=world.highestTerrainY(x,z);
+        int nh=world.highestTerrainY(nx,nz);
+        if(h<-512||nh>=h)return;
+        float bottom=nh>=-512?nh+.5f:Math.max(-1f,Math.min(p0.y,p1.y)-3f);
+        if(bottom>=Math.min(p0.y,p1.y)-.01f)return;
+        Vector3 q0=new Vector3(p0.x,bottom,p0.z);
+        Vector3 q1=new Vector3(p1.x,bottom,p1.z);
+        Vector3 normal=new Vector3(p1).sub(p0).crs(new Vector3(q0).sub(p0)).nor();
+        mesh.setColor(new Color(0x62452fff));
+        mesh.rect(p0,p1,q1,q0,normal);
     }
 
     private boolean isTreeBase(World world,World.Block b){
